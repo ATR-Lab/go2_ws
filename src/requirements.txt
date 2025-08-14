@@ -1,0 +1,13 @@
+aiortc==1.9.0
+aiohttp
+paho-mqtt
+python-dotenv
+wasmtime
+open3d
+torch
+torchvision
+pycryptodome
+# opencv-python  # Removed: conflicts with ROS cv_bridge - use system python3-opencv instead
+pydub
+numpy==1.26.4
+
