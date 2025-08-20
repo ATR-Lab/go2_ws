@@ -1,0 +1,154 @@
+# Dance command configuration
+# Maps dance commands to their properties and timing information
+
+dance_commands:
+  Hello:
+    command_id: 1016
+    expected_duration: 3.0
+    completion_detection:
+      primary: "progress_baseline"
+      secondary: "mode_change" 
+      timeout_multiplier: 1.5
+    description: "Friendly greeting gesture"
+    category: "greeting"
+    
+  FrontFlip:
+    command_id: 1030
+    expected_duration: 5.0
+    completion_detection:
+      primary: "movement_stillness"
+      secondary: "progress_baseline"
+      timeout_multiplier: 2.0
+    description: "Forward flip maneuver"
+    category: "acrobatic"
+    
+  Dance1:
+    command_id: 1022
+    expected_duration: 10.0
+    completion_detection:
+      primary: "progress_baseline"
+      secondary: "mode_change"
+      timeout_multiplier: 1.8
+    description: "Built-in dance routine #1"
+    category: "dance"
+    
+  Dance2:
+    command_id: 1023
+    expected_duration: 8.0
+    completion_detection:
+      primary: "progress_baseline"
+      secondary: "mode_change"
+      timeout_multiplier: 1.8
+    description: "Built-in dance routine #2"
+    category: "dance"
+    
+  Handstand:
+    command_id: 1301
+    expected_duration: 6.0
+    completion_detection:
+      primary: "movement_stillness"
+      secondary: "progress_baseline"
+      timeout_multiplier: 2.5
+    description: "Handstand pose"
+    category: "acrobatic"
+    
+  WiggleHips:
+    command_id: 1033
+    expected_duration: 4.0
+    completion_detection:
+      primary: "progress_baseline"
+      secondary: "movement_stillness"
+      timeout_multiplier: 1.8
+    description: "Hip wiggling dance move"
+    category: "dance"
+    
+  FingerHeart:
+    command_id: 1036
+    expected_duration: 3.5
+    completion_detection:
+      primary: "progress_baseline"
+      secondary: "mode_change"
+      timeout_multiplier: 1.6
+    description: "Finger heart gesture"
+    category: "gesture"
+    
+  MoonWalk:
+    command_id: 1305
+    expected_duration: 7.0
+    completion_detection:
+      primary: "movement_stillness"
+      secondary: "progress_baseline"
+      timeout_multiplier: 2.0
+    description: "Moonwalk dance move"
+    category: "dance"
+    
+  Stretch:
+    command_id: 1017
+    expected_duration: 4.0
+    completion_detection:
+      primary: "progress_baseline"
+      secondary: "mode_change"
+      timeout_multiplier: 1.5
+    description: "Stretching routine"
+    category: "exercise"
+    
+  Pose:
+    command_id: 1028
+    expected_duration: 2.0
+    completion_detection:
+      primary: "progress_baseline"
+      secondary: "movement_stillness"
+      timeout_multiplier: 1.3
+    description: "Strike a pose"
+    category: "pose"
+
+# Pre-defined dance routines
+dance_routines:
+  greeting_sequence:
+    name: "Friendly Greeting"
+    description: "Simple greeting routine for visitors"
+    commands:
+      - command: "Hello"
+        delay_before: 0.0
+      - command: "FingerHeart"
+        delay_before: 1.0
+      - command: "Pose"
+        delay_before: 0.5
+    total_duration: 8.5
+    
+  party_routine:
+    name: "Party Dance"
+    description: "Energetic party routine"
+    commands:
+      - command: "Dance1"
+        delay_before: 0.0
+      - command: "WiggleHips"
+        delay_before: 0.5
+      - command: "MoonWalk"
+        delay_before: 1.0
+      - command: "Dance2"
+        delay_before: 0.5
+    loop: true
+    loop_count: 2
+    total_duration: 32.0
+    
+  acrobatic_show:
+    name: "Acrobatic Performance"
+    description: "Impressive acrobatic moves"
+    commands:
+      - command: "Hello"
+        delay_before: 0.0
+      - command: "FrontFlip"
+        delay_before: 2.0
+      - command: "Handstand"
+        delay_before: 2.0
+      - command: "Pose"
+        delay_before: 1.0
+    total_duration: 18.0
+
+# Detection parameters
+detection_parameters:
+  progress_threshold: 0.1       # Threshold for progress change detection
+  stillness_threshold: 0.05     # Velocity threshold for movement stillness
+  stillness_duration: 1.0       # Required stillness duration in seconds
+  mode_stability_count: 3       # Number of readings for mode stability

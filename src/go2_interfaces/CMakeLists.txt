@@ -13,6 +13,7 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(builtin_interfaces REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
@@ -54,7 +55,18 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/WebRtcReq.msg"
   "msg/WirelessController.msg"
 
-  DEPENDENCIES geometry_msgs # Add packages that above messages depend on
+  # Dance orchestration messages
+  "msg/DanceCommand.msg"
+  "msg/DanceSequence.msg"
+  "msg/CommandExecutionStatus.msg"
+  "msg/DanceSequenceStatus.msg"
+
+  # Dance orchestration services
+  "srv/ExecuteSingleCommand.srv"
+  "srv/StartDanceRoutine.srv"
+  "srv/StopDanceRoutine.srv"
+
+  DEPENDENCIES geometry_msgs builtin_interfaces # Add packages that above messages depend on
 )
 
 

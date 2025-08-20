@@ -1,0 +1,5 @@
+# Request to stop current dance routine
+---
+# Response
+bool success
+string message

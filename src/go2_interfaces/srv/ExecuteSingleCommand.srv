@@ -1,0 +1,8 @@
+# Request to execute a single dance command
+string command_name
+float32 expected_duration
+---
+# Response
+bool success
+string message
+int32 estimated_duration   # seconds
