@@ -72,16 +72,15 @@ class DanceOrchestratorNode(Node):
             10
         )
         
-        # Timer for periodic status updates
+        # Timer for periodic status updates and completion checking
         self.status_timer = self.create_timer(0.1, self._publish_status_update)
         
-        logger.info("Dance Orchestrator Node initialized successfully")
+        logger.info("Dance Orchestrator Node initialized successfully - Hybrid detection active")
         
     def _check_command_completion(self, execution: CommandExecution):
-        """Check if current command should be completed using robot state feedback only"""
-        # This method is now just a placeholder - all completion detection 
-        # happens in the SingleCommandTracker based on robot state updates
-        pass
+        """Check command completion using hybrid detection approach"""
+        # Call the hybrid completion checker (works with or without robot state)
+        self.command_tracker.check_completion_without_state()
         
     def _execute_command_callback(self, request, response):
         """Handle single command execution requests"""
@@ -102,7 +101,7 @@ class DanceOrchestratorNode(Node):
             
             if success:
                 response.success = True
-                response.message = f"Command {request.command_name} started successfully (using robot feedback)"
+                response.message = f"Command {request.command_name} started successfully (hybrid detection: robot state + intelligent timing)"
             else:
                 response.success = False
                 response.message = f"Failed to start command {request.command_name}"

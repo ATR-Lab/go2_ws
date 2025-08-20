@@ -94,7 +94,7 @@ class SingleCommandTracker(ICommandTracker):
         return True
         
     def on_robot_state_update(self, state: Go2State) -> None:
-        """Process robot state updates for completion detection"""
+        """Process robot state updates for hybrid completion detection"""
         if (not self.current_execution or 
             self.current_execution.status != CommandStatus.EXECUTING):
             return
@@ -103,26 +103,41 @@ class SingleCommandTracker(ICommandTracker):
         if self.current_execution.baseline_progress is None:
             self.current_execution.baseline_progress = state.progress
             self.current_execution.baseline_mode = state.mode
-            logger.info(f"BASELINE SET - Progress: {state.progress}, Mode: {state.mode}")
+            logger.info(f"ROBOT STATE BASELINE SET - Progress: {state.progress}, Mode: {state.mode}")
+            
+        # Always update progress history for robot state detection
+        self.current_execution.progress_history.append(state.progress)
+        if len(self.current_execution.progress_history) > 20:
+            self.current_execution.progress_history.pop(0)
+            
+        # Let hybrid detector decide completion (robot state available)
+        self._check_completion_with_state(state)
+        
+    def check_completion_without_state(self) -> None:
+        """Check completion when no robot state is available (hybrid fallback)"""
+        if (not self.current_execution or 
+            self.current_execution.status != CommandStatus.EXECUTING):
             return
             
-        # Log current state for debugging
-        logger.info(f"ROBOT STATE - Progress: {state.progress} (baseline: {self.current_execution.baseline_progress}), "
-                   f"Mode: {state.mode} (baseline: {self.current_execution.baseline_mode}), "
-                   f"Velocity: {state.velocity}")
+        # Let hybrid detector handle timing-based completion
+        self._check_completion_with_state(None)
         
-        # Check for completion
+    def _check_completion_with_state(self, state: Go2State) -> None:
+        """Unified completion checking for both robot state and timing modes"""
         is_complete, reason = self.completion_detector.detect_completion(
             self.current_execution, state
         )
         
         if is_complete:
-            logger.info(f"COMPLETION DETECTED - Reason: {reason}")
+            logger.info(f"COMPLETION DETECTED - {reason} after {self.current_execution.elapsed_time:.1f}s")
             self._complete_command(reason)
         else:
-            # Log why not complete every few seconds
-            if int(self.current_execution.elapsed_time) % 3 == 0:
-                logger.info(f"Still executing - elapsed: {self.current_execution.elapsed_time:.1f}s")
+            # Periodic progress logging
+            if int(self.current_execution.elapsed_time) % 2 == 0:
+                if state:
+                    logger.debug(f"Robot state active - Progress: {state.progress}, Mode: {state.mode}")
+                else:
+                    logger.debug(f"Intelligent timing mode - {self.current_execution.elapsed_time:.1f}s elapsed")
             
     def get_current_execution(self) -> Optional[CommandExecution]:
         """Get currently executing command"""

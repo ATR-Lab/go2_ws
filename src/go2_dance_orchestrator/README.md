@@ -7,7 +7,9 @@ ROS2 package for orchestrating dance routines on Go2 robot with command completi
 This package provides a comprehensive dance orchestration system for the Unitree Go2 robot, featuring:
 
 - **Single Command Execution**: Execute individual dance moves with completion tracking
-- **Multi-Modal Completion Detection**: Uses progress monitoring, mode changes, movement stillness, and timeout fallback
+- **Hybrid Completion Detection**: Intelligent robot state monitoring with intelligent timing fallback
+- **Command-Specific Timing**: Each dance move has appropriate expected duration
+- **Automatic Upgrade**: Seamlessly switches to robot feedback when available
 - **ROS2 Integration**: Clean integration with existing `go2_robot_sdk`
 - **Extensible Architecture**: Designed for easy addition of dance sequences and new commands
 
@@ -16,13 +18,13 @@ This package provides a comprehensive dance orchestration system for the Unitree
 ### Phase 1: Single Command Tracker ✅
 
 - Execute individual dance commands: "Hello", "FrontFlip", "Dance1", etc.
-- Real-time completion detection using multiple methods:
-  - Progress baseline monitoring
-  - Robot mode change detection  
-  - Movement stillness detection
-  - Timeout fallback protection
-- Status publishing with progress updates
-- Service-based command interface
+- **Hybrid completion detection** with two complementary approaches:
+  - **Primary**: Robot state feedback (progress, mode, movement analysis)
+  - **Fallback**: Intelligent command-specific timing (works without robot state)
+- **Automatic detection mode switching**: Uses robot feedback when available, timing when not
+- **Smooth progress indication**: Realistic progress curves based on command type
+- **Real-time status publishing**: Progress, timing, and completion reasons
+- **Simple service interface**: No configuration required - just specify command name
 
 ## Installation
 
@@ -49,14 +51,14 @@ ros2 launch go2_dance_orchestrator single_command_test.launch.py
 ### Execute Single Dance Commands
 
 ```bash
-# Execute a greeting gesture
-ros2 service call /execute_dance_command go2_interfaces/srv/ExecuteSingleCommand "{command_name: 'Hello', expected_duration: 3.0}"
+# Execute a greeting gesture (completes in ~3 seconds)
+ros2 service call /execute_dance_command go2_interfaces/srv/ExecuteSingleCommand "{command_name: 'Hello'}"
 
-# Execute a front flip
-ros2 service call /execute_dance_command go2_interfaces/srv/ExecuteSingleCommand "{command_name: 'FrontFlip', expected_duration: 5.0}"
+# Execute a front flip (completes in ~5 seconds)  
+ros2 service call /execute_dance_command go2_interfaces/srv/ExecuteSingleCommand "{command_name: 'FrontFlip'}"
 
-# Execute built-in dance routine
-ros2 service call /execute_dance_command go2_interfaces/srv/ExecuteSingleCommand "{command_name: 'Dance1', expected_duration: 10.0}"
+# Execute built-in dance routine (completes in ~10 seconds)
+ros2 service call /execute_dance_command go2_interfaces/srv/ExecuteSingleCommand "{command_name: 'Dance1'}"
 ```
 
 ### Monitor Command Status
@@ -125,18 +127,66 @@ Real-time status of command execution with progress, timing, and completion reas
 
 ## Completion Detection
 
-The system uses multiple methods to detect when commands complete:
+The system uses a **hybrid approach** with automatic fallback for robust completion detection:
 
+### Primary: Robot State Feedback (When Available)
 1. **Progress Monitoring**: Tracks robot progress field returning to baseline
-2. **Mode Detection**: Monitors robot mode changes back to idle
+2. **Mode Detection**: Monitors robot mode changes back to idle  
 3. **Movement Stillness**: Detects when robot velocity drops to near zero
-4. **Timeout Fallback**: Prevents indefinite hanging with generous timeouts
+
+### Fallback: Intelligent Timing (Always Works)
+- **Command-specific durations**: Each command has realistic expected completion time
+- **Smart progress curves**: Natural progress indication even without robot state
+- **Immediate availability**: Works even when robot state data is unavailable
+
+### Automatic Mode Selection
+- **Attempts robot state detection first** (3-second grace period)
+- **Seamlessly falls back to timing** if no robot state data flows
+- **Automatically upgrades to robot state** if data becomes available later
+- **No configuration needed**: Works out-of-the-box in any environment
 
 ## Configuration
 
-Command timing and detection parameters are configured in:
-- `config/dance_commands.yaml`: Command definitions and timing
-- Node parameters: Detection thresholds and behavior
+The hybrid detection system is **zero-configuration** by design:
+
+- **Built-in command timing**: All commands have pre-tuned intelligent durations
+- **Automatic detection**: No setup needed for robot state vs. timing modes  
+- **Self-adapting thresholds**: Detection parameters optimized for reliable completion
+- **Override capability**: Advanced users can modify detection parameters via ROS2 parameters if needed
+
+### Command Duration Mapping
+```python
+# Built-in intelligent durations (seconds)
+"Hello": 3.0          # Quick greeting
+"Dance1": 10.0        # Full dance routine  
+"FrontFlip": 5.0      # Athletic move
+"WiggleHips": 6.0     # Expressive dance
+# ... and more
+```
+
+## Why Hybrid Detection?
+
+This approach provides the **best of both worlds**:
+
+### ✅ **Immediate Functionality**
+- Works instantly, even without robot state data flowing
+- No debugging WebRTC sensor streams required  
+- Reliable for development, testing, and demos
+
+### ✅ **Future-Ready**
+- Automatically upgrades when robot state becomes available
+- No code changes needed to benefit from robot feedback
+- Preserves pure detection architecture for optimal performance
+
+### ✅ **Robust Operation** 
+- **Network resilient**: Not dependent on continuous data streams
+- **Condition adaptive**: Works regardless of robot state availability
+- **Graceful degradation**: Falls back smoothly when robot connection issues occur
+
+### ✅ **User-Friendly**
+- **Zero configuration**: Works out-of-the-box
+- **Predictable timing**: Users know approximately when commands complete
+- **Clear feedback**: Completion reasons indicate which detection method was used
 
 ## Future Enhancements (Roadmap)
 

@@ -48,7 +48,7 @@ class DanceCommandTester(Node):
         request = ExecuteSingleCommand.Request()
         request.command_name = command_name
         
-        self.get_logger().info(f'Executing command: {command_name} (using robot state feedback)')
+        self.get_logger().info(f'Executing command: {command_name} (hybrid detection: robot state + intelligent timing)')
         
         future = self.execute_client.call_async(request)
         rclpy.spin_until_future_complete(self, future)
@@ -110,11 +110,15 @@ def main():
             # Execute command
             success = tester.execute_command(command_name)
             if success:
-                # Wait for completion with generous timeout
+                # Wait for completion using intelligent timing + buffer
                 start_time = time.time()
-                timeout = 60.0  # Universal 60s safety timeout
+                intelligent_durations = {
+                    "Hello": 3.0, "Dance1": 10.0, "FrontFlip": 5.0, "WiggleHips": 6.0
+                }
+                expected_duration = intelligent_durations.get(command_name, 5.0)
+                timeout = expected_duration + 2.0  # Add 2s buffer
                 
-                print(f"Waiting for robot feedback completion (max {timeout}s)...")
+                print(f"Waiting for hybrid completion (expected ~{expected_duration}s, max {timeout}s)...")
                 while time.time() - start_time < timeout:
                     rclpy.spin_once(tester, timeout_sec=0.1)
                     time.sleep(0.1)

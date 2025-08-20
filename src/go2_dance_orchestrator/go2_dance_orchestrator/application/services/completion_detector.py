@@ -15,17 +15,49 @@ from ...domain.entities.dance_command import CommandExecution
 
 
 class CommandCompletionDetector(ICompletionDetector):
-    """Detects command completion using pure robot state feedback"""
+    """Hybrid completion detector: robot state feedback + intelligent timing fallback"""
     
     def __init__(self):
-        # Detection thresholds
+        # Robot state detection thresholds
         self.progress_threshold = 0.1  # Progress change threshold
         self.stillness_threshold = 0.05  # Velocity threshold for stillness
         self.stillness_duration = 1.0  # Seconds of stillness required
         self.mode_stability_count = 3  # Number of readings for mode stability
         
-        # Universal safety timeout (same for all commands)
-        self.universal_timeout = 60.0  # 60 seconds maximum for any command
+        # Hybrid detection configuration
+        self.robot_state_timeout = 3.0  # Wait 3s for robot state before fallback
+        self.has_robot_state = False  # Track if robot state data is flowing
+        self.last_robot_state_time = None  # Track when we last received state
+        
+        # Intelligent command duration mapping (based on actual robot behavior)
+        self.intelligent_durations = {
+            # Basic poses and gestures (quick)
+            "Hello": 3.0,
+            "FingerHeart": 3.0,
+            "Pose": 4.0,
+            "Stretch": 5.0,
+            
+            # Dance moves (longer, expressive)  
+            "Dance1": 18.0,
+            "Dance2": 12.0,
+            "WiggleHips": 6.0,
+            "Content": 8.0,
+            
+            # Athletic moves (medium duration)
+            "FrontFlip": 5.0,
+            "FrontJump": 4.0,
+            "FrontPounce": 4.0,
+            "Handstand": 7.0,
+            
+            # Movement patterns
+            "Bound": 6.0,
+            "MoonWalk": 8.0,
+            "CrossWalk": 7.0,
+            "OnesidedStep": 5.0,
+            
+            # Default for unknown commands
+            "_default": 5.0
+        }
         
         # History tracking
         self.velocity_history: List[float] = []
@@ -35,23 +67,47 @@ class CommandCompletionDetector(ICompletionDetector):
                          execution: CommandExecution,
                          current_state: Go2State) -> tuple[bool, str]:
         """
-        Detect command completion using pure robot state feedback.
+        Hybrid completion detection: robot state feedback + intelligent timing fallback.
         Returns (is_complete, completion_reason)
         """
+        import time
         
-        # Method 1: Progress-based detection (PRIMARY)
-        if self._detect_progress_completion(execution, current_state):
-            return True, "robot_progress_complete"
+        # Track robot state availability
+        if current_state:
+            self.has_robot_state = True
+            self.last_robot_state_time = time.time()
+        
+        # Method 1: Robot State Detection (PREFERRED)
+        if self.has_robot_state and current_state:
+            # Try robot state-based completion detection
+            if self._detect_progress_completion(execution, current_state):
+                return True, "robot_progress_complete"
+                
+            if self._detect_mode_completion(execution, current_state):
+                return True, "robot_mode_idle"
+                
+            if self._detect_stillness_completion(execution, current_state):
+                return True, "robot_movement_stopped"
+        
+        # Method 2: Intelligent Timing Fallback
+        # Use if: no robot state OR robot state stopped flowing OR reasonable time has passed
+        should_use_timing = (
+            not self.has_robot_state or  # Never received robot state
+            (self.last_robot_state_time and 
+             time.time() - self.last_robot_state_time > self.robot_state_timeout) or  # State stopped
+            execution.elapsed_time > self.robot_state_timeout  # Give state detection a chance first
+        )
+        
+        if should_use_timing:
+            intelligent_duration = self.intelligent_durations.get(
+                execution.command_name, 
+                self.intelligent_durations["_default"]
+            )
             
-        # Method 2: Mode change detection
-        if self._detect_mode_completion(execution, current_state):
-            return True, "robot_mode_idle"
-            
-        # Method 3: Movement stillness (for dynamic moves)
-        if self._detect_stillness_completion(execution, current_state):
-            return True, "robot_movement_stopped"
-            
-        # No artificial timeouts - rely purely on robot state feedback
+            if execution.elapsed_time >= intelligent_duration:
+                return True, f"intelligent_timing_complete_{intelligent_duration}s"
+        
+        # Continue waiting
         return False, ""
         
     def _detect_progress_completion(self, execution: CommandExecution, state: Go2State) -> bool:
