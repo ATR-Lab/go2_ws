@@ -1,6 +1,6 @@
 # Request to execute a single dance command
 string command_name
-float32 expected_duration
+float32 expected_duration   # -1.0 = use config default, >0 = override config
 ---
 # Response
 bool success
