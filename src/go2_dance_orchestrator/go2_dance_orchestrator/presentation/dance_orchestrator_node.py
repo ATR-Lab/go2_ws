@@ -22,6 +22,7 @@ from go2_interfaces.msg import CommandExecutionStatus
 from ..application.services.single_command_tracker import SingleCommandTracker
 from ..infrastructure.integration.go2_sdk_bridge import Go2SDKBridge
 from ..domain.entities.dance_command import CommandExecution
+from ..domain.enums.command_status import CommandStatus
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +116,16 @@ class DanceOrchestratorNode(Node):
         config_duration = dance_commands[command_name].get('expected_duration', 5.0)
         logger.debug(f"Using config duration {config_duration}s for {command_name}")
         return config_duration
+    
+    def _check_command_completion(self, execution: CommandExecution):
+        """Check if current command should be completed"""
+        if execution.status != CommandStatus.EXECUTING:
+            return
+            
+        # Use existing timeout detection logic
+        if execution.is_timeout_exceeded:
+            logger.info(f"Command {execution.command_name} timed out after {execution.elapsed_time:.2f}s")
+            self.command_tracker.stop_current_command()
         
     def _execute_command_callback(self, request, response):
         """Handle single command execution requests"""
@@ -188,9 +199,12 @@ class DanceOrchestratorNode(Node):
         self._publish_command_status(execution)
         
     def _publish_status_update(self):
-        """Publish periodic status updates"""
+        """Publish periodic status updates and check for completion"""
         current_execution = self.command_tracker.get_current_execution()
         if current_execution:
+            # Check for completion first
+            self._check_command_completion(current_execution)
+            # Then publish status
             self._publish_command_status(current_execution)
             
     def _publish_command_status(self, execution: CommandExecution):
