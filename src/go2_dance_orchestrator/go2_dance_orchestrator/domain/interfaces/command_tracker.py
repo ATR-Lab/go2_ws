@@ -19,7 +19,6 @@ class ICommandTracker(ABC):
     @abstractmethod
     def execute_command(self, 
                        command_name: str,
-                       expected_duration: float,
                        completion_callback: Callable[[CommandExecution], None]) -> bool:
         """Execute a single dance command with tracking"""
         pass

@@ -15,7 +15,7 @@ from ...domain.entities.dance_command import CommandExecution
 
 
 class CommandCompletionDetector(ICompletionDetector):
-    """Detects command completion using multiple detection methods"""
+    """Detects command completion using pure robot state feedback"""
     
     def __init__(self):
         # Detection thresholds
@@ -23,6 +23,9 @@ class CommandCompletionDetector(ICompletionDetector):
         self.stillness_threshold = 0.05  # Velocity threshold for stillness
         self.stillness_duration = 1.0  # Seconds of stillness required
         self.mode_stability_count = 3  # Number of readings for mode stability
+        
+        # Universal safety timeout (same for all commands)
+        self.universal_timeout = 60.0  # 60 seconds maximum for any command
         
         # History tracking
         self.velocity_history: List[float] = []
@@ -32,26 +35,23 @@ class CommandCompletionDetector(ICompletionDetector):
                          execution: CommandExecution,
                          current_state: Go2State) -> tuple[bool, str]:
         """
-        Detect command completion using multiple methods.
+        Detect command completion using pure robot state feedback.
         Returns (is_complete, completion_reason)
         """
         
-        # Method 1: Timeout fallback (highest priority)
-        if execution.is_timeout_exceeded:
-            return True, "timeout_exceeded"
-            
-        # Method 2: Progress-based detection  
+        # Method 1: Progress-based detection (PRIMARY)
         if self._detect_progress_completion(execution, current_state):
-            return True, "progress_returned_to_baseline"
+            return True, "robot_progress_complete"
             
-        # Method 3: Mode change detection
+        # Method 2: Mode change detection
         if self._detect_mode_completion(execution, current_state):
-            return True, "mode_returned_to_baseline"
+            return True, "robot_mode_idle"
             
-        # Method 4: Movement stillness (for dynamic moves)
+        # Method 3: Movement stillness (for dynamic moves)
         if self._detect_stillness_completion(execution, current_state):
-            return True, "movement_stillness_detected"
+            return True, "robot_movement_stopped"
             
+        # No artificial timeouts - rely purely on robot state feedback
         return False, ""
         
     def _detect_progress_completion(self, execution: CommandExecution, state: Go2State) -> bool:

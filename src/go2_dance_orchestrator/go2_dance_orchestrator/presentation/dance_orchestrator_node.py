@@ -6,15 +6,12 @@ Main ROS2 node for dance orchestration.
 """
 
 import logging
-import os
-import yaml
-from typing import Optional, Dict, Any
+from typing import Optional
 
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from builtin_interfaces.msg import Time
-from ament_index_python.packages import get_package_share_directory
 
 from go2_interfaces.srv import ExecuteSingleCommand, StopDanceRoutine
 from go2_interfaces.msg import CommandExecutionStatus
@@ -37,9 +34,7 @@ class DanceOrchestratorNode(Node):
         logging.basicConfig(level=logging.INFO)
         logger.info("Initializing Dance Orchestrator Node...")
         
-        # Load dance commands configuration
-        self.command_config = self._load_dance_commands_config()
-        logger.info(f"Loaded {len(self.command_config.get('dance_commands', {}))} dance commands from config")
+        # Pure detection-based completion - no configuration needed
         
         # Integration with go2_robot_sdk
         self.sdk_bridge = Go2SDKBridge(self)
@@ -82,50 +77,11 @@ class DanceOrchestratorNode(Node):
         
         logger.info("Dance Orchestrator Node initialized successfully")
         
-    def _load_dance_commands_config(self) -> Dict[str, Any]:
-        """Load dance commands configuration from YAML file"""
-        try:
-            package_share_dir = get_package_share_directory('go2_dance_orchestrator')
-            config_path = os.path.join(package_share_dir, 'config', 'dance_commands.yaml')
-            
-            if not os.path.exists(config_path):
-                logger.warning(f"Config file not found at {config_path}, using empty config")
-                return {'dance_commands': {}}
-            
-            with open(config_path, 'r') as file:
-                config = yaml.safe_load(file)
-                logger.info(f"Successfully loaded config from {config_path}")
-                return config
-                
-        except Exception as e:
-            logger.error(f"Error loading config: {e}")
-            return {'dance_commands': {}}
-    
-    def _get_command_duration(self, command_name: str, requested_duration: float = -1.0) -> float:
-        """Get command duration from config or use requested override"""
-        if requested_duration > 0:
-            logger.debug(f"Using override duration {requested_duration}s for {command_name}")
-            return requested_duration
-            
-        # Look up from config
-        dance_commands = self.command_config.get('dance_commands', {})
-        if command_name not in dance_commands:
-            logger.warning(f"Command {command_name} not found in config, using default 5.0s")
-            return 5.0  # Default fallback
-            
-        config_duration = dance_commands[command_name].get('expected_duration', 5.0)
-        logger.debug(f"Using config duration {config_duration}s for {command_name}")
-        return config_duration
-    
     def _check_command_completion(self, execution: CommandExecution):
-        """Check if current command should be completed"""
-        if execution.status != CommandStatus.EXECUTING:
-            return
-            
-        # Use existing timeout detection logic
-        if execution.is_timeout_exceeded:
-            logger.info(f"Command {execution.command_name} timed out after {execution.elapsed_time:.2f}s")
-            self.command_tracker.stop_current_command()
+        """Check if current command should be completed using robot state feedback only"""
+        # This method is now just a placeholder - all completion detection 
+        # happens in the SingleCommandTracker based on robot state updates
+        pass
         
     def _execute_command_callback(self, request, response):
         """Handle single command execution requests"""
@@ -138,23 +94,15 @@ class DanceOrchestratorNode(Node):
                 response.message = "Command name cannot be empty"
                 return response
             
-            # Get duration from config or use override
-            expected_duration = self._get_command_duration(
-                request.command_name, 
-                request.expected_duration
-            )
-            
             # Execute command
             success = self.command_tracker.execute_command(
                 command_name=request.command_name,
-                expected_duration=expected_duration,
                 completion_callback=self._on_command_complete
             )
             
             if success:
                 response.success = True
-                response.message = f"Command {request.command_name} started successfully (duration: {expected_duration}s)"
-                response.estimated_duration = int(expected_duration)
+                response.message = f"Command {request.command_name} started successfully (using robot feedback)"
             else:
                 response.success = False
                 response.message = f"Failed to start command {request.command_name}"

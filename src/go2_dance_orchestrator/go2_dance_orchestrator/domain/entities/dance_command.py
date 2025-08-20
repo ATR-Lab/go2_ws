@@ -17,7 +17,6 @@ class CommandExecution:
     """Tracks execution of a single dance command"""
     command_name: str
     command_id: int
-    expected_duration: float
     start_time: Optional[float] = None
     completion_time: Optional[float] = None
     status: CommandStatus = CommandStatus.PENDING
@@ -41,18 +40,21 @@ class CommandExecution:
         end_time = self.completion_time or time.time()
         return end_time - self.start_time
     
-    @property  
-    def is_timeout_exceeded(self) -> bool:
-        """Check if command has exceeded timeout"""
-        return self.elapsed_time > (self.expected_duration * 1.5)  # 50% timeout buffer
-    
     @property
     def progress_percent(self) -> float:
-        """Calculate progress percentage"""
+        """Calculate progress percentage based on robot state feedback"""
         if self.status == CommandStatus.COMPLETED:
             return 100.0
-        elif self.status == CommandStatus.EXECUTING and self.expected_duration > 0:
-            return min(95.0, (self.elapsed_time / self.expected_duration) * 100.0)
+        elif self.status == CommandStatus.EXECUTING:
+            # Real progress based on robot state changes
+            if self.baseline_progress is not None and len(self.progress_history) > 0:
+                current_progress = self.progress_history[-1]
+                progress_change = abs(current_progress - self.baseline_progress)
+                # Heuristic: more change from baseline = more progress
+                return min(95.0, progress_change * 100.0)
+            else:
+                # Just started - robot state baseline not yet established
+                return 5.0  
         else:
             return 0.0
             

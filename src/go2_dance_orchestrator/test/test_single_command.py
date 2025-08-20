@@ -43,16 +43,12 @@ class DanceCommandTester(Node):
         
         self.get_logger().info('Dance command tester ready')
         
-    def execute_command(self, command_name: str, duration: float = -1.0):
+    def execute_command(self, command_name: str):
         """Execute a dance command"""
         request = ExecuteSingleCommand.Request()
         request.command_name = command_name
-        request.expected_duration = duration  # -1.0 = use config default
         
-        if duration > 0:
-            self.get_logger().info(f'Executing command: {command_name} (override duration: {duration}s)')
-        else:
-            self.get_logger().info(f'Executing command: {command_name} (using config duration)')
+        self.get_logger().info(f'Executing command: {command_name} (using robot state feedback)')
         
         future = self.execute_client.call_async(request)
         rclpy.spin_until_future_complete(self, future)
@@ -61,13 +57,13 @@ class DanceCommandTester(Node):
             response = future.result()
             if response.success:
                 self.get_logger().info(f'Command started: {response.message}')
-                return response.estimated_duration
+                return True
             else:
                 self.get_logger().error(f'Command failed: {response.message}')
-                return 0
+                return False
         else:
             self.get_logger().error('Service call failed')
-            return 0
+            return False
             
     def stop_command(self):
         """Stop current command"""
@@ -99,26 +95,26 @@ def main():
     
     tester = DanceCommandTester()
     
-    # Test commands - mix of config-based and override durations
+    # Test commands using pure robot state feedback
     test_commands = [
-        ("Hello", -1.0),      # Use config duration (should be 3.0s)
-        ("Dance1", -1.0),     # Use config duration (should be 10.0s)
-        ("FrontFlip", 3.0),   # Override config (normally 5.0s, use 3.0s)
-        ("WiggleHips", -1.0), # Use config duration (should be 4.0s)
+        "Hello",
+        "Dance1", 
+        "FrontFlip",
+        "WiggleHips",
     ]
     
     try:
-        for command_name, duration in test_commands:
+        for command_name in test_commands:
             print(f"\n=== Testing {command_name} ===")
             
             # Execute command
-            actual_duration = tester.execute_command(command_name, duration)
-            if actual_duration > 0:
-                # Wait for completion (with timeout)
+            success = tester.execute_command(command_name)
+            if success:
+                # Wait for completion with generous timeout
                 start_time = time.time()
-                timeout = actual_duration * 2  # Double the actual duration
+                timeout = 60.0  # Universal 60s safety timeout
                 
-                print(f"Waiting up to {timeout}s for completion...")
+                print(f"Waiting for robot feedback completion (max {timeout}s)...")
                 while time.time() - start_time < timeout:
                     rclpy.spin_once(tester, timeout_sec=0.1)
                     time.sleep(0.1)

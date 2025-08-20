@@ -48,7 +48,6 @@ class SingleCommandTracker(ICommandTracker):
         
     def execute_command(self, 
                        command_name: str,
-                       expected_duration: float,
                        completion_callback: Callable[[CommandExecution], None]) -> bool:
         """Execute a single dance command with tracking"""
         
@@ -67,8 +66,7 @@ class SingleCommandTracker(ICommandTracker):
         # Create execution tracker
         self.current_execution = CommandExecution(
             command_name=command_name,
-            command_id=command_id,
-            expected_duration=expected_duration
+            command_id=command_id
         )
         
         self.completion_callback = completion_callback
@@ -91,7 +89,7 @@ class SingleCommandTracker(ICommandTracker):
         
         # Start tracking
         self.current_execution.start()
-        logger.info(f"Started tracking command {command_name} (expected duration: {expected_duration}s)")
+        logger.info(f"Started tracking command {command_name} (using robot state feedback)")
         
         return True
         
@@ -105,26 +103,36 @@ class SingleCommandTracker(ICommandTracker):
         if self.current_execution.baseline_progress is None:
             self.current_execution.baseline_progress = state.progress
             self.current_execution.baseline_mode = state.mode
-            logger.debug(f"Baseline set - Progress: {state.progress}, Mode: {state.mode}")
+            logger.info(f"BASELINE SET - Progress: {state.progress}, Mode: {state.mode}")
             return
             
+        # Log current state for debugging
+        logger.info(f"ROBOT STATE - Progress: {state.progress} (baseline: {self.current_execution.baseline_progress}), "
+                   f"Mode: {state.mode} (baseline: {self.current_execution.baseline_mode}), "
+                   f"Velocity: {state.velocity}")
+        
         # Check for completion
         is_complete, reason = self.completion_detector.detect_completion(
             self.current_execution, state
         )
         
         if is_complete:
+            logger.info(f"COMPLETION DETECTED - Reason: {reason}")
             self._complete_command(reason)
+        else:
+            # Log why not complete every few seconds
+            if int(self.current_execution.elapsed_time) % 3 == 0:
+                logger.info(f"Still executing - elapsed: {self.current_execution.elapsed_time:.1f}s")
             
     def get_current_execution(self) -> Optional[CommandExecution]:
         """Get currently executing command"""
         return self.current_execution
         
-    def stop_current_command(self) -> bool:
+    def stop_current_command(self, reason: str = "manual_stop") -> bool:
         """Stop currently executing command"""
         if (self.current_execution and 
             self.current_execution.status == CommandStatus.EXECUTING):
-            self._complete_command("manual_stop")
+            self._complete_command(reason)
             return True
         return False
             
