@@ -140,6 +140,7 @@ class Go2UIWindow(QMainWindow):
         # Robot controller to UI feedback connections
         self.robot_controller.command_sent.connect(self.status_panel.show_command_feedback)
         self.robot_controller.command_failed.connect(self.status_panel.show_error_message)
+        self.robot_controller.action_status_updated.connect(self.status_panel.show_action_status)
         
         self.node.get_logger().info('Signal connections established between all components')
     

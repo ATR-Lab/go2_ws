@@ -17,6 +17,7 @@ class RobotDataService:
 
     def __init__(self, publisher: IRobotDataPublisher):
         self.publisher = publisher
+        self.sport_response_callback = None
 
     def process_webrtc_message(self, msg: Dict[str, Any], robot_id: str) -> None:
         """Process WebRTC message"""
@@ -149,4 +150,9 @@ class RobotDataService:
 
     def _validate_float(self, value: Any) -> bool:
         """Validate a float value"""
-        return isinstance(value, (int, float)) and math.isfinite(value) 
+        return isinstance(value, (int, float)) and math.isfinite(value)
+    
+    def set_sport_response_callback(self, callback) -> None:
+        """Set callback for sport response messages from WebRTC"""
+        self.sport_response_callback = callback
+        logger.info("Sport response callback registered in RobotDataService") 

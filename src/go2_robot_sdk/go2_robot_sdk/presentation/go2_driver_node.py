@@ -17,7 +17,7 @@ from tf2_ros import TransformBroadcaster
 
 from geometry_msgs.msg import Twist, PoseStamped
 from go2_interfaces.msg import Go2State, IMU
-from go2_interfaces.msg import LowState, VoxelMapCompressed, WebRtcReq
+from go2_interfaces.msg import LowState, VoxelMapCompressed, WebRtcReq, Res
 from sensor_msgs.msg import PointCloud2, JointState, Joy, Image, CameraInfo
 from nav_msgs.msg import Odometry
 
@@ -68,11 +68,17 @@ class Go2DriverNode(Node):
         # Set callback for data
         self.webrtc_adapter.set_data_callback(self._on_robot_data_received)
         
+        # Set sport response callback for WebRTC bridge
+        self.webrtc_adapter.set_sport_response_callback(self._on_sport_response)
+        
         # Subscribers initialization
         self._setup_subscribers()
         
         # State
         self.joy_state = Joy()
+        
+        # Sport response callback for action service integration
+        self.sport_response_callback = None
 
     def _setup_configuration(self) -> RobotConfig:
         """Configuration setup"""
@@ -229,6 +235,11 @@ class Go2DriverNode(Node):
             self.create_subscription(
                 PointCloud2, '/utlidar/cloud',
                 self._on_cyclonedds_lidar, qos_profile)
+            
+            # Add sport response subscription for action service integration
+            self.create_subscription(
+                Res, RTC_TOPIC["SPORT_MOD_RESPONSE"],
+                self._on_sport_response, qos_profile)
 
     def _on_set_parameters(self, params) -> SetParametersResult:
         """Callback for parameter changes"""
@@ -329,6 +340,15 @@ class Go2DriverNode(Node):
         """Processing lidar for CycloneDDS"""
         # You can add processing for CycloneDDS here if needed
         pass
+
+    def _on_sport_response(self, msg: Res) -> None:
+        """Handle sport mode responses for action service integration"""
+        if self.sport_response_callback:
+            self.sport_response_callback(msg)
+
+    def set_sport_response_callback(self, callback):
+        """Set callback for sport response messages"""
+        self.sport_response_callback = callback
 
     async def connect_robots(self) -> None:
         """Connect to robots"""

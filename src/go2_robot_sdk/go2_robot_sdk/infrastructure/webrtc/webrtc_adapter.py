@@ -22,6 +22,7 @@ class WebRTCAdapter(IRobotDataReceiver, IRobotController):
         self.config = config
         self.connections: Dict[str, Go2Connection] = {}
         self.data_callback: Callable[[RobotData], None] = None
+        self.sport_response_callback: Callable = None
         self.webrtc_msgs = asyncio.Queue()
         self.on_validated_callback = on_validated_callback
         self.on_video_frame_callback = on_video_frame_callback
@@ -189,6 +190,11 @@ class WebRTCAdapter(IRobotDataReceiver, IRobotController):
     def _on_data_channel_message(self, _, msg: Dict[str, Any], robot_id: str) -> None:
         """Handle incoming data channel messages"""
         try:
+            # Check for sport response messages first
+            if self._is_sport_response(msg):
+                self._handle_sport_response(msg, robot_id)
+            
+            # Continue with existing data processing
             if self.data_callback:
                 # Создаем объект RobotData для передачи в callback
                 # Фактическая обработка будет в RobotDataService
@@ -196,4 +202,74 @@ class WebRTCAdapter(IRobotDataReceiver, IRobotController):
                 self.data_callback(msg, robot_id)  # Передаем сырые данные для обработки
                 
         except Exception as e:
-            logger.error(f"Error processing data channel message: {e}") 
+            logger.error(f"Error processing data channel message: {e}")
+    
+    def _is_sport_response(self, msg: Dict[str, Any]) -> bool:
+        """Check if message is a sport response"""
+        try:
+            # Check for sport response topic or API response structure
+            topic = msg.get('topic', '')
+            if topic == RTC_TOPIC.get("SPORT_MOD_RESPONSE", "rt/api/sport/response"):
+                return True
+            
+            # Alternative: Check for response structure with API ID
+            if 'header' in msg and 'identity' in msg['header']:
+                api_id = msg['header']['identity'].get('api_id', 0)
+                # Sport API IDs are typically in 1000-2999 range
+                if 1000 <= api_id <= 2999:
+                    return True
+                    
+            return False
+        except Exception as e:
+            logger.debug(f"Error checking sport response: {e}")
+            return False
+    
+    def _handle_sport_response(self, msg: Dict[str, Any], robot_id: str) -> None:
+        """Handle sport response message and convert to ROS2 format"""
+        try:
+            if not self.sport_response_callback:
+                return
+                
+            # Convert WebRTC response to ROS2 Res message format
+            ros2_response = self._convert_to_ros2_response(msg)
+            if ros2_response:
+                # Call the sport response callback (same as CycloneDDS)
+                self.sport_response_callback(ros2_response)
+                logger.debug(f"Sport response forwarded for robot {robot_id}")
+                
+        except Exception as e:
+            logger.error(f"Error handling sport response: {e}")
+    
+    def _convert_to_ros2_response(self, msg: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert WebRTC response message to ROS2 Res message format"""
+        try:
+            # Extract response data from WebRTC message
+            header = msg.get('header', {})
+            identity = header.get('identity', {})
+            status = header.get('status', {})
+            
+            # Create ROS2-compatible response structure
+            ros2_response = {
+                'header': {
+                    'identity': {
+                        'api_id': identity.get('api_id', 0),
+                        'id': identity.get('id', ''),
+                    },
+                    'status': {
+                        'code': status.get('code', 0)
+                    }
+                },
+                'data': msg.get('data', ''),
+                'binary': msg.get('binary', [])
+            }
+            
+            return ros2_response
+            
+        except Exception as e:
+            logger.error(f"Error converting WebRTC response to ROS2 format: {e}")
+            return None
+    
+    def set_sport_response_callback(self, callback: Callable) -> None:
+        """Set callback for sport response messages"""
+        self.sport_response_callback = callback
+        logger.info("Sport response callback registered for WebRTC adapter") 

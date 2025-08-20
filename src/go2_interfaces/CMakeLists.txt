@@ -54,6 +54,9 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/WebRtcReq.msg"
   "msg/WirelessController.msg"
 
+  # Services
+  "srv/ExecuteAction.srv"
+
   DEPENDENCIES geometry_msgs # Add packages that above messages depend on
 )
 

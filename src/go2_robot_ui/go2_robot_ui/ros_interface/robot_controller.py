@@ -11,6 +11,7 @@ from python_qt_binding.QtCore import QObject, pyqtSignal
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
 from go2_interfaces.msg import WebRtcReq
+from go2_interfaces.srv import ExecuteAction
 from std_msgs.msg import String
 
 
@@ -29,6 +30,7 @@ class RobotController(QObject):
     # Signals for command feedback
     command_sent = pyqtSignal(str)
     command_failed = pyqtSignal(str)
+    action_status_updated = pyqtSignal(str, bool, str, float)  # action_name, success, message, execution_time
     
     # Robot command constants (from go2_robot_sdk)
     ROBOT_COMMANDS = {
@@ -118,10 +120,14 @@ class RobotController(QObject):
             self.qos_profile
         )
         
+        # Create action service client
+        self.action_client = node.create_client(ExecuteAction, '/go2/execute_action')
+        
         # Command state tracking
         self.last_command_time = 0
         self.command_cooldown = 0.5  # Minimum time between commands (seconds)
         self.emergency_cooldown = 0.1  # Shorter cooldown for emergency commands
+        self.use_action_service = True  # Prefer action service when available
         
         node.get_logger().info('Robot controller initialized')
         node.get_logger().info(f'Available actions: {list(self.ROBOT_COMMANDS.keys())}')
@@ -155,9 +161,14 @@ class RobotController(QObject):
                 self.command_failed.emit(error_msg)
                 return False
             
-            # Create and send WebRTC request
+            # Get API ID for the action
             api_id = self.ROBOT_COMMANDS[action_name]
-            success = self._send_webrtc_request(api_id, action_name)
+            
+            # Try action service first if available, fallback to WebRTC
+            if self.use_action_service and self.action_client.service_is_ready():
+                success = self._send_action_service_request(api_id, action_name)
+            else:
+                success = self._send_webrtc_request(api_id, action_name)
             
             if success:
                 self.last_command_time = current_time
@@ -282,6 +293,69 @@ class RobotController(QObject):
         """Get dictionary mapping QR codes to robot actions."""
         return self.QR_ACTION_MAP.copy()
     
+    def _send_action_service_request(self, api_id: int, action_name: str) -> bool:
+        """
+        Send action request via the ExecuteAction service.
+        
+        Args:
+            api_id: API command ID
+            action_name: Human-readable action name
+            
+        Returns:
+            True if request was sent successfully, False otherwise
+        """
+        try:
+            # Create service request
+            request = ExecuteAction.Request()
+            request.action_id = api_id
+            request.parameters = ""  # Empty for basic actions
+            request.timeout = 30.0  # 30 second timeout
+            
+            self.node.get_logger().info(f'Sending action service request: {action_name} (ID: {api_id})')
+            
+            # Call service asynchronously
+            future = self.action_client.call_async(request)
+            
+            # Add callback for when service completes
+            future.add_done_callback(lambda f: self._handle_action_response(f, action_name))
+            
+            return True
+            
+        except Exception as e:
+            self.node.get_logger().error(f'Failed to send action service request: {e}')
+            return False
+    
+    def _handle_action_response(self, future, action_name: str):
+        """Handle response from ExecuteAction service."""
+        try:
+            response = future.result()
+            
+            # Emit status update signal
+            self.action_status_updated.emit(
+                action_name,
+                response.success,
+                response.error_message if not response.success else "Action completed successfully",
+                response.execution_time
+            )
+            
+            if response.success:
+                self.node.get_logger().info(
+                    f'Action {action_name} completed successfully in {response.execution_time:.2f}s'
+                )
+            else:
+                self.node.get_logger().error(
+                    f'Action {action_name} failed: {response.error_message} (code: {response.error_code})'
+                )
+                
+        except Exception as e:
+            self.node.get_logger().error(f'Error handling action response: {e}')
+            self.action_status_updated.emit(
+                action_name,
+                False,
+                f"Service call failed: {str(e)}",
+                0.0
+            )
+
     def is_valid_action(self, action_name: str) -> bool:
         """Check if an action name is valid."""
         return action_name in self.ROBOT_COMMANDS

@@ -51,6 +51,11 @@ class StatusPanel(QWidget):
         self.joint_data = {}
         self.is_connected = False
         
+        # Action tracking
+        self.current_action = None
+        self.action_history = []
+        self.action_start_time = None
+        
         # UI components
         self.status_labels = {}
         self.progress_bars = {}
@@ -95,6 +100,7 @@ class StatusPanel(QWidget):
         
         # Create status groups
         status_layout.addWidget(self._create_connection_group())
+        status_layout.addWidget(self._create_action_status_group())
         status_layout.addWidget(self._create_robot_state_group())
         status_layout.addWidget(self._create_imu_group())
         status_layout.addWidget(self._create_joint_group())
@@ -145,6 +151,75 @@ class StatusPanel(QWidget):
         self.status_labels['data_rates'] = QLabel("Robot State: -- | IMU: -- | Joints: --")
         self.status_labels['data_rates'].setStyleSheet(self._get_info_label_style())
         layout.addWidget(self.status_labels['data_rates'])
+        
+        return group
+    
+    def _create_action_status_group(self) -> QGroupBox:
+        """Create action status group for displaying action execution details."""
+        group = QGroupBox("Action Status")
+        group.setStyleSheet(self._get_group_style())
+        
+        layout = QVBoxLayout(group)
+        
+        # Current action
+        current_action_layout = QHBoxLayout()
+        current_action_layout.addWidget(QLabel("Current Action:"))
+        self.status_labels['current_action'] = QLabel("None")
+        self.status_labels['current_action'].setStyleSheet(self._get_value_label_style())
+        current_action_layout.addWidget(self.status_labels['current_action'])
+        current_action_layout.addStretch()
+        layout.addLayout(current_action_layout)
+        
+        # Action progress bar
+        self.progress_bars['action_progress'] = QProgressBar()
+        self.progress_bars['action_progress'].setVisible(False)
+        self.progress_bars['action_progress'].setStyleSheet(
+            "QProgressBar { "
+            "border: 2px solid #555; "
+            "border-radius: 5px; "
+            "text-align: center; "
+            "background-color: #2b2b2b; "
+            "color: #fff; "
+            "} "
+            "QProgressBar::chunk { "
+            "background-color: #4ade80; "
+            "border-radius: 3px; "
+            "}"
+        )
+        layout.addWidget(self.progress_bars['action_progress'])
+        
+        # Action result
+        self.status_labels['action_result'] = QLabel("Ready for commands")
+        self.status_labels['action_result'].setStyleSheet(self._get_status_label_style())
+        layout.addWidget(self.status_labels['action_result'])
+        
+        # Execution time
+        execution_time_layout = QHBoxLayout()
+        execution_time_layout.addWidget(QLabel("Execution Time:"))
+        self.status_labels['execution_time'] = QLabel("--")
+        self.status_labels['execution_time'].setStyleSheet(self._get_info_label_style())
+        execution_time_layout.addWidget(self.status_labels['execution_time'])
+        execution_time_layout.addStretch()
+        layout.addLayout(execution_time_layout)
+        
+        # Last 3 actions history
+        history_label = QLabel("Recent Actions:")
+        history_label.setStyleSheet("QLabel { color: #fff; font-weight: bold; margin-top: 10px; }")
+        layout.addWidget(history_label)
+        
+        self.status_labels['action_history'] = QLabel("No actions executed yet")
+        self.status_labels['action_history'].setStyleSheet(
+            "QLabel { "
+            "color: #e5e7eb; "
+            "font-size: 9px; "
+            "padding: 5px; "
+            "background-color: #1a1a1a; "
+            "border: 1px solid #333; "
+            "border-radius: 3px; "
+            "}"
+        )
+        self.status_labels['action_history'].setWordWrap(True)
+        layout.addWidget(self.status_labels['action_history'])
         
         return group
     
@@ -436,6 +511,9 @@ class StatusPanel(QWidget):
             self._get_status_label_style() + "background-color: #2d5016;"
         )
         
+        # Update action status
+        self._start_action_tracking(command)
+        
         # Reset status after 3 seconds
         QTimer.singleShot(3000, self._reset_command_status)
     
@@ -449,6 +527,101 @@ class StatusPanel(QWidget):
         
         # Reset status after 5 seconds
         QTimer.singleShot(5000, self._reset_command_status)
+    
+    @pyqtSlot(str, bool, str, float)
+    def show_action_status(self, action_name: str, success: bool, message: str, execution_time: float) -> None:
+        """Show action completion status from ExecuteAction service."""
+        # Update last command
+        self.status_labels['last_command'].setText(f"Action: {action_name}")
+        
+        # Complete action tracking
+        self._complete_action_tracking(action_name, success, message, execution_time)
+        
+        if success:
+            # Success status
+            status_text = f"✓ Completed in {execution_time:.1f}s"
+            self.status_labels['command_status'].setText(status_text)
+            self.status_labels['command_status'].setStyleSheet(
+                self._get_status_label_style() + "background-color: #2d5016;"
+            )
+            
+            # Reset status after 4 seconds
+            QTimer.singleShot(4000, self._reset_command_status)
+        else:
+            # Failure status
+            status_text = f"✗ Failed: {message}"
+            self.status_labels['command_status'].setText(status_text)
+            self.status_labels['command_status'].setStyleSheet(
+                self._get_status_label_style() + "background-color: #5c1616;"
+            )
+            
+            # Reset status after 6 seconds for errors
+            QTimer.singleShot(6000, self._reset_command_status)
+    
+    def _start_action_tracking(self, action_name: str) -> None:
+        """Start tracking an action execution."""
+        import time
+        self.current_action = action_name
+        self.action_start_time = time.time()
+        
+        # Update UI
+        self.status_labels['current_action'].setText(action_name)
+        self.status_labels['action_result'].setText("Executing...")
+        self.status_labels['action_result'].setStyleSheet(
+            self._get_status_label_style() + "background-color: #1e40af;"
+        )
+        self.status_labels['execution_time'].setText("--")
+        
+        # Show and animate progress bar
+        self.progress_bars['action_progress'].setVisible(True)
+        self.progress_bars['action_progress'].setRange(0, 0)  # Indeterminate progress
+    
+    def _complete_action_tracking(self, action_name: str, success: bool, message: str, execution_time: float) -> None:
+        """Complete action tracking and update history."""
+        import time
+        
+        # Update current action display
+        self.current_action = None
+        self.status_labels['current_action'].setText("None")
+        self.status_labels['execution_time'].setText(f"{execution_time:.1f}s")
+        
+        # Hide progress bar
+        self.progress_bars['action_progress'].setVisible(False)
+        
+        # Update result status
+        if success:
+            self.status_labels['action_result'].setText(f"✓ {action_name} completed successfully")
+            self.status_labels['action_result'].setStyleSheet(
+                self._get_status_label_style() + "background-color: #2d5016;"
+            )
+        else:
+            self.status_labels['action_result'].setText(f"✗ {action_name} failed: {message}")
+            self.status_labels['action_result'].setStyleSheet(
+                self._get_status_label_style() + "background-color: #5c1616;"
+            )
+        
+        # Add to history
+        timestamp = time.strftime("%H:%M:%S")
+        status_icon = "✓" if success else "✗"
+        history_entry = f"{timestamp} - {status_icon} {action_name} ({execution_time:.1f}s)"
+        if not success:
+            history_entry += f": {message}"
+        
+        self.action_history.insert(0, history_entry)
+        if len(self.action_history) > 3:
+            self.action_history = self.action_history[:3]
+        
+        # Update history display
+        if self.action_history:
+            self.status_labels['action_history'].setText("\n".join(self.action_history))
+        
+        # Reset action result after delay
+        QTimer.singleShot(5000, self._reset_action_result)
+    
+    def _reset_action_result(self) -> None:
+        """Reset action result to ready state."""
+        self.status_labels['action_result'].setText("Ready for commands")
+        self.status_labels['action_result'].setStyleSheet(self._get_status_label_style())
     
     def _reset_command_status(self) -> None:
         """Reset command status to ready."""

@@ -1,0 +1,10 @@
+# Request
+int32 action_id          # Robot command ID (e.g., 1030 for FrontFlip)
+string parameters        # JSON parameters (optional)
+float32 timeout          # Maximum wait time (default: 30.0)
+---
+# Response
+bool success            # Action completed successfully
+int32 error_code        # Error code if failed (0 = success)
+string error_message    # Human-readable error description
+float32 execution_time  # Time taken to complete

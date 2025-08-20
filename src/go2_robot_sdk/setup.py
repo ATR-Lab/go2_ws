@@ -36,7 +36,8 @@ setup(
     license='BSD-3-Clause',
     entry_points={
         'console_scripts': [
-            'go2_driver_node = go2_robot_sdk.main:main',
+            'go2_driver = go2_robot_sdk.main:main',
+            'go2_action_service = go2_robot_sdk.application.services.go2_action_service:main',
         ],
     },
 )
