@@ -62,6 +62,14 @@ rosidl_generate_interfaces(${PROJECT_NAME}
     "msg/DanceSequenceStatus.msg"
     "msg/DanceRoutine.msg"
     "msg/DanceRoutineStatus.msg"
+    
+    # Sport API messages (structured request/response)
+    "msg/SportIdentity.msg"
+    "msg/SportStatus.msg"
+    "msg/SportRequestHeader.msg"
+    "msg/SportResponseHeader.msg"
+    "msg/SportRequest.msg"
+    "msg/SportResponse.msg"
 
     # Dance orchestration services
     "srv/ExecuteSingleCommand.srv"
