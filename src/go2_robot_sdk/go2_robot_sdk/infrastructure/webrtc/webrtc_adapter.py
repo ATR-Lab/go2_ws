@@ -86,26 +86,34 @@ class WebRTCAdapter(IRobotDataReceiver, IRobotController):
 
     def send_command(self, robot_id: str, command: str) -> None:
         """Send command to robot"""
+        logger.info(f"📤 WEBRTC ADAPTER - SENDING COMMAND to robot {robot_id}")
+        logger.info(f"   Command: {command[:200]}...")
+        
         if robot_id in self.connections:
             try:
                 connection = self.connections[robot_id]
                 if hasattr(connection, 'data_channel') and connection.data_channel:
+                    logger.info(f"   Data Channel State: {connection.data_channel.readyState}")
                     # Use asyncio.run_coroutine_threadsafe to handle cross-thread calls
                     loop = self._get_or_create_event_loop()
                     if loop and loop.is_running():
+                        logger.info("   Using async send via event loop")
                         # Schedule the coroutine in the existing loop
                         asyncio.run_coroutine_threadsafe(
                             self._async_send_command(connection, command),
                             loop
                         )
                     else:
+                        logger.info("   Using synchronous send")
                         # Fallback to synchronous send
                         connection.data_channel.send(command)
-                    logger.debug(f"Command sent to robot {robot_id}: {command[:50]}")
+                    logger.info(f"✅ Command successfully sent to robot {robot_id}")
                 else:
-                    logger.warning(f"No data channel available for robot {robot_id}")
+                    logger.warning(f"❌ No data channel available for robot {robot_id}")
             except Exception as e:
-                logger.error(f"Error sending command to robot {robot_id}: {e}")
+                logger.error(f"❌ Error sending command to robot {robot_id}: {e}")
+        else:
+            logger.warning(f"❌ Robot {robot_id} not found in connections")
 
     def _get_or_create_event_loop(self):
         """Get existing event loop or return the main loop"""
@@ -120,9 +128,13 @@ class WebRTCAdapter(IRobotDataReceiver, IRobotController):
         """Async wrapper for sending commands"""
         try:
             if hasattr(connection, 'data_channel') and connection.data_channel:
+                logger.info(f"🔄 ASYNC SEND: Sending via data channel...")
                 connection.data_channel.send(command)
+                logger.info(f"🔄 ASYNC SEND: Message sent successfully")
+            else:
+                logger.warning(f"🔄 ASYNC SEND: No data channel available")
         except Exception as e:
-            logger.error(f"Error in async send command: {e}")
+            logger.error(f"❌ Error in async send command: {e}")
 
     def send_movement_command(self, robot_id: str, x: float, y: float, z: float) -> None:
         """Send movement command to robot"""
@@ -194,11 +206,36 @@ class WebRTCAdapter(IRobotDataReceiver, IRobotController):
     def _on_data_channel_message(self, _, msg: Dict[str, Any], robot_id: str) -> None:
         """Handle incoming data channel messages"""
         try:
-            # Check if this is a sport response message
-            topic = msg.get('topic', '')
-            if topic == RTC_TOPIC.get("SPORT_MOD_RESPONSE", "rt/api/sport/response"):
+            # DEBUG: Log ALL messages to understand what we're receiving
+            topic = msg.get('topic', 'NO_TOPIC')
+            logger.info(f"🔍 DEBUG - ALL WebRTC Messages from robot {robot_id}:")
+            logger.info(f"   Topic: '{topic}'")
+            logger.info(f"   Keys: {list(msg.keys())}")
+            
+            # Look for any sport/response/api related content
+            msg_str = str(msg).lower()
+            if any(keyword in msg_str for keyword in ['sport', 'response', 'api', '1016', '1022']):
+                # Safe serialization that handles numpy arrays
+                try:
+                    safe_msg = json.dumps(msg, indent=2, default=str)
+                    logger.info(f"🎯 POTENTIAL SPORT MESSAGE: {safe_msg}")
+                except:
+                    logger.info(f"🎯 POTENTIAL SPORT MESSAGE: {str(msg)[:500]}...")
+            
+            # Check if this is a sport response message (multiple variations)
+            potential_sport_topics = [
+                "rt/api/sport/response",
+                "api/sport/response", 
+                "sport/response",
+                "response",
+                "rt/sportresponse",
+                "sportresponse"
+            ]
+            
+            if topic in potential_sport_topics:
+                logger.info(f"🤖 MATCHED SPORT RESPONSE TOPIC: {topic}")
                 if self.sport_response_callback:
-                    logger.debug(f"Received sport response from robot {robot_id}: {msg}")
+                    logger.info(f"📞 Calling sport response callback...")
                     self.sport_response_callback(msg, robot_id)
                 return
             
