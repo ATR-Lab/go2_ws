@@ -22,6 +22,7 @@ class WebRTCAdapter(IRobotDataReceiver, IRobotController):
         self.config = config
         self.connections: Dict[str, Go2Connection] = {}
         self.data_callback: Callable[[RobotData], None] = None
+        self.sport_response_callback: Callable[[Dict[str, Any], str], None] = None
         self.webrtc_msgs = asyncio.Queue()
         self.on_validated_callback = on_validated_callback
         self.on_video_frame_callback = on_video_frame_callback
@@ -78,6 +79,10 @@ class WebRTCAdapter(IRobotDataReceiver, IRobotController):
     def set_data_callback(self, callback: Callable[[RobotData], None]) -> None:
         """Set callback for data reception"""
         self.data_callback = callback
+    
+    def set_sport_response_callback(self, callback: Callable[[Dict[str, Any], str], None]) -> None:
+        """Set callback for sport response messages"""
+        self.sport_response_callback = callback
 
     def send_command(self, robot_id: str, command: str) -> None:
         """Send command to robot"""
@@ -189,6 +194,15 @@ class WebRTCAdapter(IRobotDataReceiver, IRobotController):
     def _on_data_channel_message(self, _, msg: Dict[str, Any], robot_id: str) -> None:
         """Handle incoming data channel messages"""
         try:
+            # Check if this is a sport response message
+            topic = msg.get('topic', '')
+            if topic == RTC_TOPIC.get("SPORT_MOD_RESPONSE", "rt/api/sport/response"):
+                if self.sport_response_callback:
+                    logger.debug(f"Received sport response from robot {robot_id}: {msg}")
+                    self.sport_response_callback(msg, robot_id)
+                return
+            
+            # Handle other data messages
             if self.data_callback:
                 # Создаем объект RobotData для передачи в callback
                 # Фактическая обработка будет в RobotDataService

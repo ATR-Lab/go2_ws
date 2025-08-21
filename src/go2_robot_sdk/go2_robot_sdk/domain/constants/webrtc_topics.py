@@ -24,6 +24,7 @@ RTC_TOPIC = {
     "LOW_CMD": "rt/lowcmd",
     "WIRELESS_CONTROLLER": "rt/wirelesscontroller",
     "SPORT_MOD": "rt/api/sport/request",
+    "SPORT_MOD_RESPONSE": "rt/api/sport/response",
     "SPORT_MOD_STATE": "rt/sportmodestate",
     "LF_SPORT_MOD_STATE": "rt/lf/sportmodestate",
     "BASH_REQ": "rt/api/bashrunner/request",

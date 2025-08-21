@@ -23,6 +23,7 @@ from nav_msgs.msg import Odometry
 
 from ..domain.entities import RobotConfig, RobotData, CameraData
 from ..application.services import RobotDataService, RobotControlService
+from ..application.services.sport_response_service import SportResponseService
 from ..infrastructure.ros2 import ROS2Publisher
 from ..infrastructure.webrtc import WebRTCAdapter
 
@@ -55,6 +56,7 @@ class Go2DriverNode(Node):
         )
         
         self.robot_data_service = RobotDataService(self.ros2_publisher)
+        self.sport_response_service = SportResponseService()
         
         self.webrtc_adapter = WebRTCAdapter(
             config=self.config,
@@ -67,6 +69,8 @@ class Go2DriverNode(Node):
         
         # Set callback for data
         self.webrtc_adapter.set_data_callback(self._on_robot_data_received)
+        # Set callback for sport responses
+        self.webrtc_adapter.set_sport_response_callback(self.sport_response_service.handle_sport_response)
         
         # Subscribers initialization
         self._setup_subscribers()
