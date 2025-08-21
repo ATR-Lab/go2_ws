@@ -1,4 +1,3 @@
-# Copyright (c) 2024, RoboVerse community
 # SPDX-License-Identifier: Apache-2.0
 
 """

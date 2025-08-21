@@ -1,4 +1,3 @@
-# Copyright (c) 2024, RoboVerse community
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -6,6 +5,7 @@ Main ROS2 node for dance orchestration.
 """
 
 import logging
+import time
 from typing import Optional
 
 import rclpy
