@@ -5,8 +5,11 @@
 Multi-modal command completion detector.
 """
 
+import logging
 import numpy as np
 from typing import List
+
+logger = logging.getLogger(__name__)
 
 from go2_interfaces.msg import Go2State
 
@@ -74,8 +77,12 @@ class CommandCompletionDetector(ICompletionDetector):
         
         # Track robot state availability
         if current_state:
+            if not self.has_robot_state:
+                logger.debug(f"Robot state connection established for command: {execution.command_name}")
             self.has_robot_state = True
             self.last_robot_state_time = time.time()
+        else:
+            logger.debug(f"No robot state received for command: {execution.command_name}")
         
         # Method 1: Robot State Detection (PREFERRED)
         if self.has_robot_state and current_state:
@@ -174,3 +181,6 @@ class CommandCompletionDetector(ICompletionDetector):
         """Reset detection history for new command"""
         self.velocity_history.clear()
         self.mode_history.clear()
+        # Reset robot state tracking flags for fresh command
+        self.has_robot_state = False
+        self.last_robot_state_time = None

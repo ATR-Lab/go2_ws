@@ -113,7 +113,7 @@ def main():
                 # Wait for completion using intelligent timing + buffer
                 start_time = time.time()
                 intelligent_durations = {
-                    "Hello": 3.0, "Dance1": 10.0, "FrontFlip": 5.0, "WiggleHips": 6.0
+                    "Hello": 3.0, "Dance1": 18.0, "FrontFlip": 5.0, "WiggleHips": 6.0
                 }
                 expected_duration = intelligent_durations.get(command_name, 5.0)
                 timeout = expected_duration + 2.0  # Add 2s buffer

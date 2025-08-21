@@ -55,16 +55,18 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/WebRtcReq.msg"
   "msg/WirelessController.msg"
 
-  # Dance orchestration messages
-  "msg/DanceCommand.msg"
-  "msg/DanceSequence.msg"
-  "msg/CommandExecutionStatus.msg"
-  "msg/DanceSequenceStatus.msg"
+      # Dance orchestration messages
+    "msg/DanceCommand.msg"
+    "msg/DanceSequence.msg"
+    "msg/CommandExecutionStatus.msg"
+    "msg/DanceSequenceStatus.msg"
+    "msg/DanceRoutine.msg"
+    "msg/DanceRoutineStatus.msg"
 
-  # Dance orchestration services
-  "srv/ExecuteSingleCommand.srv"
-  "srv/StartDanceRoutine.srv"
-  "srv/StopDanceRoutine.srv"
+    # Dance orchestration services
+    "srv/ExecuteSingleCommand.srv"
+    "srv/StartDanceRoutine.srv"
+    "srv/StopDanceRoutine.srv"
 
   DEPENDENCIES geometry_msgs builtin_interfaces # Add packages that above messages depend on
 )

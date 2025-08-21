@@ -13,10 +13,11 @@ from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from builtin_interfaces.msg import Time
 
-from go2_interfaces.srv import ExecuteSingleCommand, StopDanceRoutine
-from go2_interfaces.msg import CommandExecutionStatus
+from go2_interfaces.srv import ExecuteSingleCommand, StopDanceRoutine, StartDanceRoutine
+from go2_interfaces.msg import CommandExecutionStatus, DanceRoutineStatus
 
 from ..application.services.single_command_tracker import SingleCommandTracker
+from ..application.services.dance_sequence_executor import DanceSequenceExecutor
 from ..infrastructure.integration.go2_sdk_bridge import Go2SDKBridge
 from ..domain.entities.dance_command import CommandExecution
 from ..domain.enums.command_status import CommandStatus
@@ -42,21 +43,34 @@ class DanceOrchestratorNode(Node):
         # Single command tracker (Phase 1)
         self.command_tracker = SingleCommandTracker()
         
-        # Connect bridge to tracker
+        # Dance sequence executor (Phase 2) - reuses the single command tracker
+        self.sequence_executor = DanceSequenceExecutor()
+        self.sequence_executor.command_tracker = self.command_tracker  # Share the same tracker!
+        
+        # Connect bridge to the shared tracker
         self.sdk_bridge.set_state_callback(
             self.command_tracker.on_robot_state_update
         )
         
-        # Set up command sender
+        # Set up command sender for the shared tracker
         self.command_tracker.set_robot_command_sender(
             self.sdk_bridge.send_dance_command
         )
+        
+        # Register orchestrator node's completion callback
+        self.command_tracker.completion_callbacks.append(self._on_command_complete)
         
         # ROS2 Services
         self.execute_command_service = self.create_service(
             ExecuteSingleCommand,
             'execute_dance_command',
             self._execute_command_callback
+        )
+        
+        self.start_routine_service = self.create_service(
+            StartDanceRoutine,
+            'start_dance_routine',
+            self._start_dance_routine_callback
         )
         
         self.stop_command_service = self.create_service(
@@ -72,14 +86,20 @@ class DanceOrchestratorNode(Node):
             10
         )
         
+        self.routine_status_publisher = self.create_publisher(
+            DanceRoutineStatus,
+            'dance_routine_status',
+            10
+        )
+        
         # Timer for periodic status updates and completion checking
         self.status_timer = self.create_timer(0.1, self._publish_status_update)
         
-        logger.info("Dance Orchestrator Node initialized successfully - Hybrid detection active")
+        logger.info("Dance Orchestrator Node initialized successfully - Hybrid detection + Sequence execution active")
         
     def _check_command_completion(self, execution: CommandExecution):
         """Check command completion using hybrid detection approach"""
-        # Call the hybrid completion checker (works with or without robot state)
+        # Only check the shared tracker since both single commands and sequences use it
         self.command_tracker.check_completion_without_state()
         
     def _execute_command_callback(self, request, response):
@@ -96,7 +116,7 @@ class DanceOrchestratorNode(Node):
             # Execute command
             success = self.command_tracker.execute_command(
                 command_name=request.command_name,
-                completion_callback=self._on_command_complete
+                completion_callback=None  # Orchestrator callback already registered
             )
             
             if success:
@@ -112,20 +132,65 @@ class DanceOrchestratorNode(Node):
             response.message = f"Internal error: {str(e)}"
             
         return response
-        
-    def _stop_command_callback(self, request, response):
-        """Handle command stop requests"""
-        logger.info("Received command stop request")
+            
+    def _start_dance_routine_callback(self, request, response):
+        """Handle dance routine execution requests"""
+        logger.info(f"Received dance routine request: {request.command_sequence}")
         
         try:
-            success = self.command_tracker.stop_current_command()
+            # Validate request
+            if not request.command_sequence:
+                response.success = False
+                response.message = "Command sequence cannot be empty"
+                return response
+            
+            # Generate routine name if not provided
+            routine_name = request.routine_name
+            if not routine_name:
+                routine_name = f"routine_{int(time.time())}"
+            
+            # Execute sequence
+            success = self.sequence_executor.execute_sequence(
+                routine_name=routine_name,
+                command_sequence=list(request.command_sequence),
+                completion_callback=self._on_sequence_complete
+            )
             
             if success:
                 response.success = True
-                response.message = "Command stopped successfully"
+                response.message = f"Dance routine '{routine_name}' started successfully with {len(request.command_sequence)} commands"
+                response.routine_name = routine_name
             else:
                 response.success = False
-                response.message = "No command currently executing"
+                response.message = f"Failed to start dance routine"
+                
+        except Exception as e:
+            logger.error(f"Error in start dance routine callback: {e}")
+            response.success = False
+            response.message = f"Internal error: {str(e)}"
+            
+        return response
+            
+    def _stop_command_callback(self, request, response):
+        """Handle stop requests (both single commands and sequences)"""
+        logger.info("Received stop request")
+        
+        try:
+            # Try to stop sequence first
+            sequence_stopped = self.sequence_executor.stop_current_sequence("manual_stop")
+            
+            # Try to stop single command
+            command_stopped = self.command_tracker.stop_current_command("manual_stop")
+            
+            if sequence_stopped or command_stopped:
+                response.success = True
+                if sequence_stopped:
+                    response.message = "Dance routine stopped successfully"
+                else:
+                    response.message = "Single command stopped successfully"
+            else:
+                response.success = False
+                response.message = "No command or routine currently executing"
                 
         except Exception as e:
             logger.error(f"Error in stop command callback: {e}")
@@ -145,14 +210,32 @@ class DanceOrchestratorNode(Node):
         # Publish final status update
         self._publish_command_status(execution)
         
+    def _on_sequence_complete(self, sequence):
+        """Handle dance sequence completion"""
+        logger.info(
+            f"Dance routine '{sequence.routine_name}' completed - "
+            f"Duration: {sequence.elapsed_time:.2f}s, "
+            f"Commands: {sequence.total_commands}, "
+            f"Status: {sequence.status.value}"
+        )
+        
+        # Publish final status update
+        self._publish_routine_status(sequence)
+        
     def _publish_status_update(self):
         """Publish periodic status updates and check for completion"""
+        # Handle single command status
         current_execution = self.command_tracker.get_current_execution()
         if current_execution:
             # Check for completion first
             self._check_command_completion(current_execution)
             # Then publish status
             self._publish_command_status(current_execution)
+            
+        # Handle sequence status
+        current_sequence = self.sequence_executor.get_current_sequence()
+        if current_sequence:
+            self._publish_routine_status(current_sequence)
             
     def _publish_command_status(self, execution: CommandExecution):
         """Publish command execution status"""
@@ -178,6 +261,34 @@ class DanceOrchestratorNode(Node):
             status_msg.completion_time = completion_time
         
         self.status_publisher.publish(status_msg)
+        
+    def _publish_routine_status(self, sequence):
+        """Publish dance routine execution status"""
+        from ..application.services.dance_sequence_executor import SequenceStatus
+        
+        status_msg = DanceRoutineStatus()
+        status_msg.routine_name = sequence.routine_name
+        status_msg.command_sequence = sequence.command_sequence
+        status_msg.current_command_index = sequence.current_command_index
+        status_msg.current_command_name = sequence.current_command_name or ""
+        status_msg.total_commands = sequence.total_commands
+        status_msg.routine_elapsed_time = sequence.elapsed_time
+        status_msg.status = sequence.status.value
+        status_msg.completion_reason = sequence.completion_reason
+        
+        # Get current command progress from single command tracker
+        current_execution = self.command_tracker.get_current_execution()
+        if (current_execution and 
+            current_execution.command_name == sequence.current_command_name):
+            status_msg.current_command_progress_percent = current_execution.progress_percent
+            # Use current command progress for accurate overall routine progress
+            status_msg.routine_progress_percent = sequence.get_routine_progress_percent(current_execution.progress_percent)
+        else:
+            status_msg.current_command_progress_percent = 0.0
+            # Fallback routine progress without current command progress
+            status_msg.routine_progress_percent = sequence.routine_progress_percent
+        
+        self.routine_status_publisher.publish(status_msg)
 
 
 def main(args=None):

@@ -1,8 +1,8 @@
-# Request to start a dance routine
-string routine_name
-bool interrupt_current     # Stop current routine if running
+# Start a dance routine with multiple commands
+string[] command_sequence      # Commands to execute in order: ["Hello", "Dance1", "FrontFlip"]
+string routine_name           # Optional name for the routine (empty = auto-generated)
 ---
-# Response  
+# Response
 bool success
 string message
-int32 estimated_duration   # seconds
+string routine_name           # Final routine name (generated if not provided)

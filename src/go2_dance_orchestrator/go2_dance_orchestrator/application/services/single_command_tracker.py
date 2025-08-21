@@ -6,7 +6,7 @@ Single command tracker implementation.
 """
 
 import logging
-from typing import Callable, Optional
+from typing import Callable, Optional, List
 
 from go2_interfaces.msg import Go2State
 
@@ -39,7 +39,7 @@ class SingleCommandTracker(ICommandTracker):
     def __init__(self):
         self.completion_detector = CommandCompletionDetector()
         self.current_execution: Optional[CommandExecution] = None
-        self.completion_callback: Optional[Callable[[CommandExecution], None]] = None
+        self.completion_callbacks: List[Callable[[CommandExecution], None]] = []
         self.robot_command_sender: Optional[Callable[[int, str], None]] = None
         
     def set_robot_command_sender(self, sender: Callable[[int, str], None]):
@@ -69,7 +69,9 @@ class SingleCommandTracker(ICommandTracker):
             command_id=command_id
         )
         
-        self.completion_callback = completion_callback
+        # Add callback to the list if it's not already there
+        if completion_callback and completion_callback not in self.completion_callbacks:
+            self.completion_callbacks.append(completion_callback)
         
         # Reset completion detector history
         self.completion_detector.reset_history()
@@ -163,12 +165,13 @@ class SingleCommandTracker(ICommandTracker):
             f"{self.current_execution.elapsed_time:.2f}s (reason: {reason})"
         )
         
-        if self.completion_callback:
+        # Call all registered completion callbacks
+        for callback in self.completion_callbacks:
             try:
-                self.completion_callback(self.current_execution)
+                callback(self.current_execution)
             except Exception as e:
                 logger.error(f"Error in completion callback: {e}")
                 
         # Reset for next command
         self.current_execution = None
-        self.completion_callback = None
+        # Keep callbacks registered for future commands

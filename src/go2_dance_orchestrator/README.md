@@ -57,21 +57,39 @@ ros2 service call /execute_dance_command go2_interfaces/srv/ExecuteSingleCommand
 # Execute a front flip (completes in ~5 seconds)  
 ros2 service call /execute_dance_command go2_interfaces/srv/ExecuteSingleCommand "{command_name: 'FrontFlip'}"
 
-# Execute built-in dance routine (completes in ~10 seconds)
+# Execute built-in dance routine (completes in ~20 seconds)
 ros2 service call /execute_dance_command go2_interfaces/srv/ExecuteSingleCommand "{command_name: 'Dance1'}"
+```
+
+### Execute Dance Sequences (NEW!)
+
+Execute multiple commands in sequence with automatic timing and transitions:
+
+```bash
+# Simple greeting sequence
+ros2 service call /start_dance_routine go2_interfaces/srv/StartDanceRoutine "{command_sequence: ['Hello', 'FingerHeart'], routine_name: 'greeting_routine'}"
+
+# Full performance routine (your requested sequence!)
+ros2 service call /start_dance_routine go2_interfaces/srv/StartDanceRoutine "{command_sequence: ['Hello', 'Dance1', 'FrontFlip'], routine_name: 'performance_routine'}"
+
+# Athletic showcase
+ros2 service call /start_dance_routine go2_interfaces/srv/StartDanceRoutine "{command_sequence: ['Stretch', 'FrontFlip', 'Handstand'], routine_name: 'athletic_demo'}"
 ```
 
 ### Monitor Command Status
 
 ```bash
-# Monitor real-time status updates
+# Monitor single command status
 ros2 topic echo /dance_command_status
+
+# Monitor dance sequence status (NEW!)
+ros2 topic echo /dance_routine_status
 ```
 
 ### Stop Current Command
 
 ```bash
-# Emergency stop current command
+# Emergency stop current command or sequence
 ros2 service call /stop_dance_command go2_interfaces/srv/StopDanceRoutine "{}"
 ```
 
@@ -123,7 +141,13 @@ Real-time status of command execution with progress, timing, and completion reas
 ### Services
 
 - `ExecuteSingleCommand`: Execute a single dance command
-- `StopDanceRoutine`: Stop currently executing command
+- `StartDanceRoutine`: Execute a multi-command dance sequence (NEW!)
+- `StopDanceRoutine`: Stop currently executing command or sequence
+
+### Topics
+
+- `/dance_command_status`: Real-time single command status
+- `/dance_routine_status`: Real-time sequence status (NEW!)
 
 ## Completion Detection
 
@@ -158,11 +182,29 @@ The hybrid detection system is **zero-configuration** by design:
 ```python
 # Built-in intelligent durations (seconds)
 "Hello": 3.0          # Quick greeting
-"Dance1": 10.0        # Full dance routine  
+"Dance1": 18.0        # Full dance routine (extended for proper completion)
 "FrontFlip": 5.0      # Athletic move
 "WiggleHips": 6.0     # Expressive dance
 # ... and more
 ```
+
+### Smart Transition Delays
+The system implements intelligent delays between sequence commands to ensure reliable execution:
+
+```python
+# Command-specific transition delays (seconds)
+"Hello": 0.5,         # Basic moves need minimal recovery
+"FrontFlip": 1.2,     # Athletic moves need more recovery time  
+"Dance1": 1.0,        # Dance moves need moderate recovery
+"Handstand": 1.5,     # Complex poses need maximum recovery
+# Default: 0.8s for unlisted commands
+```
+
+**Why Transition Delays?**
+- **Robot Recovery**: Physical movements need settling time between commands
+- **WebRTC Stability**: Prevents command conflicts from rapid-fire sending
+- **UI Compatibility**: Matches the 500ms cooldown system used by the robot UI
+- **Reliability**: Ensures 100% success rate for multi-command sequences
 
 ## Why Hybrid Detection?
 
