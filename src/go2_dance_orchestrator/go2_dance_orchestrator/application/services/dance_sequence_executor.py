@@ -1,4 +1,3 @@
-# Copyright (c) 2024, RoboVerse community
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -124,6 +123,7 @@ class DanceSequenceExecutor:
         self.orchestrator_notifier = None  # Will be injected from orchestrator
         self.current_sequence: Optional[DanceSequenceExecution] = None
         self.sequence_completion_callback: Optional[Callable[[DanceSequenceExecution], None]] = None
+        self.pending_timer: Optional[threading.Timer] = None  # Track active timer for cleanup
         
         # Command transition timing (inspired by UI cooldown system)
         self.base_transition_delay = 0.8  # Base 800ms delay between commands
@@ -151,6 +151,13 @@ class DanceSequenceExecutor:
         """Get the appropriate delay after a command completes before starting next command"""
         return self.command_specific_delays.get(completed_command, self.base_transition_delay)
         
+    def _cancel_pending_timer(self):
+        """Cancel any pending timer to prevent resource leaks"""
+        if self.pending_timer:
+            self.pending_timer.cancel()
+            self.pending_timer = None
+            logger.debug("Cancelled pending sequence timer")
+        
     def execute_sequence(self, 
                         routine_name: str,
                         command_sequence: List[str],
@@ -173,6 +180,9 @@ class DanceSequenceExecutor:
             logger.warning(f"Sequence {self.current_sequence.routine_name} is still executing")
             return False
             
+        # Cancel any pending timer from previous sequence
+        self._cancel_pending_timer()
+            
         # Create sequence execution
         self.current_sequence = DanceSequenceExecution(routine_name, command_sequence)
         self.sequence_completion_callback = completion_callback
@@ -188,6 +198,8 @@ class DanceSequenceExecutor:
     def _execute_next_command_with_error_handling(self):
         """Execute next command with error handling (called by timer)"""
         try:
+            # Clear timer reference since it's executing now
+            self.pending_timer = None
             self._execute_next_command()
         except Exception as e:
             logger.error(f"Exception in timer callback: {e}")
@@ -239,15 +251,21 @@ class DanceSequenceExecutor:
         transition_delay = self._get_transition_delay(execution.command_name)
         logger.info(f"Sequence '{self.current_sequence.routine_name}': Waiting {transition_delay}s before next command (robot recovery time)")
         
+        # Cancel any existing pending timer before creating new one
+        self._cancel_pending_timer()
+        
         # Schedule next command after delay using timer thread
-        timer = threading.Timer(transition_delay, self._execute_next_command_with_error_handling)
-        timer.daemon = True  # Don't prevent program exit
-        timer.start()
+        self.pending_timer = threading.Timer(transition_delay, self._execute_next_command_with_error_handling)
+        self.pending_timer.daemon = True  # Don't prevent program exit
+        self.pending_timer.start()
         
     def _complete_sequence(self, reason: str):
         """Complete the current sequence"""
         if not self.current_sequence:
             return
+            
+        # Cancel any pending timer since sequence is complete
+        self._cancel_pending_timer()
             
         self.current_sequence.complete(reason)
         logger.info(f"Dance sequence '{self.current_sequence.routine_name}' completed in {self.current_sequence.elapsed_time:.1f}s")
@@ -263,6 +281,9 @@ class DanceSequenceExecutor:
         if not self.current_sequence:
             return
             
+        # Cancel any pending timer since sequence failed
+        self._cancel_pending_timer()
+            
         self.current_sequence.fail(reason, failed_command)
         logger.error(f"Dance sequence '{self.current_sequence.routine_name}' failed at command '{failed_command}': {reason}")
         
@@ -276,6 +297,9 @@ class DanceSequenceExecutor:
         """Stop currently executing sequence"""
         if not self.current_sequence or self.current_sequence.status != SequenceStatus.EXECUTING:
             return False
+            
+        # Cancel any pending timer first
+        self._cancel_pending_timer()
             
         # Stop current command first
         self.command_tracker.stop_current_command(reason)

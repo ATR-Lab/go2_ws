@@ -1,4 +1,3 @@
-# Copyright (c) 2024, RoboVerse community
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -15,6 +14,7 @@ from go2_interfaces.msg import Go2State
 
 from ...domain.interfaces.command_tracker import ICompletionDetector
 from ...domain.entities.dance_command import CommandExecution
+from ...config.dance_config import get_dance_config
 
 
 class CommandCompletionDetector(ICompletionDetector):
@@ -32,35 +32,9 @@ class CommandCompletionDetector(ICompletionDetector):
         self.has_robot_state = False  # Track if robot state data is flowing
         self.last_robot_state_time = None  # Track when we last received state
         
-        # Intelligent command duration mapping (based on actual robot behavior)
-        self.intelligent_durations = {
-            # Basic poses and gestures (quick)
-            "Hello": 3.0,
-            "FingerHeart": 7.0,
-            "Pose": 4.0,
-            "Stretch": 5.0,
-            
-            # Dance moves (longer, expressive)  
-            "Dance1": 18.0,
-            "Dance2": 12.0,
-            "WiggleHips": 6.0,
-            "Content": 8.0,
-            
-            # Athletic moves (medium duration)
-            "FrontFlip": 5.0,
-            "FrontJump": 4.0,
-            "FrontPounce": 4.0,
-            "Handstand": 7.0,
-            
-            # Movement patterns
-            "Bound": 6.0,
-            "MoonWalk": 8.0,
-            "CrossWalk": 7.0,
-            "OnesidedStep": 5.0,
-            
-            # Default for unknown commands
-            "_default": 5.0
-        }
+        # Load configuration
+        self.dance_config = get_dance_config()
+        self.default_duration = 5.0
         
         # History tracking
         self.velocity_history: List[float] = []
@@ -106,10 +80,7 @@ class CommandCompletionDetector(ICompletionDetector):
         )
         
         if should_use_timing:
-            intelligent_duration = self.intelligent_durations.get(
-                execution.command_name, 
-                self.intelligent_durations["_default"]
-            )
+            intelligent_duration = self.dance_config.get_expected_duration(execution.command_name)
             
             if execution.elapsed_time >= intelligent_duration:
                 return True, f"intelligent_timing_complete_{intelligent_duration}s"

@@ -1,4 +1,3 @@
-# Copyright (c) 2024, RoboVerse community
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -14,21 +13,7 @@ from ...domain.interfaces.command_tracker import ICommandTracker
 from ...domain.entities.dance_command import CommandExecution
 from ...domain.enums.command_status import CommandStatus
 from .completion_detector import CommandCompletionDetector
-
-# Import robot commands - we'll need to get these from go2_robot_sdk
-# For now, we'll define the ones we need
-ROBOT_CMD = {
-    "Hello": 1016,
-    "FrontFlip": 1030,
-    "Dance1": 1022,
-    "Dance2": 1023,
-    "Handstand": 1301,
-    "WiggleHips": 1033,
-    "FingerHeart": 1036,
-    "MoonWalk": 1305,
-    "Stretch": 1017,
-    "Pose": 1028,
-}
+from ...config.dance_config import get_dance_config
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +26,7 @@ class SingleCommandTracker(ICommandTracker):
         self.current_execution: Optional[CommandExecution] = None
         self.completion_callbacks: List[Callable[[CommandExecution], None]] = []
         self.robot_command_sender: Optional[Callable[[int, str], None]] = None
+        self.dance_config = get_dance_config()
         
     def set_robot_command_sender(self, sender: Callable[[int, str], None]):
         """Set callback for sending commands to robot"""
@@ -52,7 +38,7 @@ class SingleCommandTracker(ICommandTracker):
         """Execute a single dance command with tracking"""
         
         # Check if command is valid
-        command_id = ROBOT_CMD.get(command_name)
+        command_id = self.dance_config.get_command_id(command_name)
         if not command_id:
             logger.error(f"Unknown command: {command_name}")
             return False
