@@ -36,7 +36,7 @@ class CommandCompletionDetector(ICompletionDetector):
         self.intelligent_durations = {
             # Basic poses and gestures (quick)
             "Hello": 3.0,
-            "FingerHeart": 3.0,
+            "FingerHeart": 7.0,
             "Pose": 4.0,
             "Stretch": 5.0,
             

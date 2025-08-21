@@ -121,6 +121,7 @@ class DanceSequenceExecutor:
     
     def __init__(self):
         self.command_tracker = None  # Will be injected from orchestrator
+        self.orchestrator_notifier = None  # Will be injected from orchestrator
         self.current_sequence: Optional[DanceSequenceExecution] = None
         self.sequence_completion_callback: Optional[Callable[[DanceSequenceExecution], None]] = None
         
@@ -184,6 +185,15 @@ class DanceSequenceExecutor:
         
         return True
         
+    def _execute_next_command_with_error_handling(self):
+        """Execute next command with error handling (called by timer)"""
+        try:
+            self._execute_next_command()
+        except Exception as e:
+            logger.error(f"Exception in timer callback: {e}")
+            if self.current_sequence:
+                self._fail_sequence(f"timer_callback_exception: {e}", "unknown")
+
     def _execute_next_command(self):
         """Execute the next command in the current sequence"""
         if not self.current_sequence or self.current_sequence.status != SequenceStatus.EXECUTING:
@@ -221,12 +231,16 @@ class DanceSequenceExecutor:
         # Move to next command
         self.current_sequence.advance_to_next_command()
         
+        # Notify orchestrator of command completion
+        if self.orchestrator_notifier:
+            self.orchestrator_notifier.notify_command_complete(execution)
+        
         # Apply transition delay before next command (like UI cooldown system)
         transition_delay = self._get_transition_delay(execution.command_name)
         logger.info(f"Sequence '{self.current_sequence.routine_name}': Waiting {transition_delay}s before next command (robot recovery time)")
         
         # Schedule next command after delay using timer thread
-        timer = threading.Timer(transition_delay, self._execute_next_command)
+        timer = threading.Timer(transition_delay, self._execute_next_command_with_error_handling)
         timer.daemon = True  # Don't prevent program exit
         timer.start()
         

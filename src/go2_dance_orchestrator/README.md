@@ -103,7 +103,7 @@ ros2 service call /stop_dance_command go2_interfaces/srv/StopDanceRoutine "{}"
 | `Dance2` | 8.0s | Built-in dance routine #2 | dance |
 | `Handstand` | 6.0s | Handstand pose | acrobatic |
 | `WiggleHips` | 4.0s | Hip wiggling dance move | dance |
-| `FingerHeart` | 3.5s | Finger heart gesture | gesture |
+| `FingerHeart` | 7.0s | Finger heart gesture | gesture |
 | `MoonWalk` | 7.0s | Moonwalk dance move | dance |
 | `Stretch` | 4.0s | Stretching routine | exercise |
 | `Pose` | 2.0s | Strike a pose | pose |
@@ -227,7 +227,7 @@ This approach provides the **best of both worlds**:
 
 ### ✅ **User-Friendly**
 - **Zero configuration**: Works out-of-the-box
-- **Predictable timing**: Users know approximately when commands complete
+- **Predictable timing**: Users know approximately wrhen commands complete
 - **Clear feedback**: Completion reasons indicate which detection method was used
 
 ## Future Enhancements (Roadmap)
@@ -273,6 +273,22 @@ This package follows clean architecture principles. When adding new features:
 2. Define interfaces in `domain/interfaces/`
 3. Implement services in `application/services/`
 4. Update ROS2 integration in `presentation/`
+
+## Race Condition Fix
+
+**Issue**: Intermittent duplicate commands and skipped final commands in sequences.
+
+**Root Cause**: Dual callback registration created race conditions during sequence advancement:
+- Orchestrator node registered completion callback for logging/status
+- Sequence executor registered completion callback for advancement
+- Both callbacks fired simultaneously, causing double advancement of sequence index
+
+**Solution**: Single Responsibility Pattern
+- Removed orchestrator's direct callback registration
+- Sequence executor handles advancement then notifies orchestrator
+- Clean execution flow: Command → Sequence Executor → Orchestrator
+
+**Result**: Reliable single callback execution, eliminating race conditions and ensuring proper sequence progression.
 
 ## License
 

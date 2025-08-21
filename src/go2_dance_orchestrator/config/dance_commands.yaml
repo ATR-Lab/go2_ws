@@ -24,7 +24,7 @@ dance_commands:
     
   Dance1:
     command_id: 1022
-    expected_duration: 10.0
+    expected_duration: 18.0
     completion_detection:
       primary: "progress_baseline"
       secondary: "mode_change"
@@ -64,7 +64,7 @@ dance_commands:
     
   FingerHeart:
     command_id: 1036
-    expected_duration: 3.5
+    expected_duration: 7.0
     completion_detection:
       primary: "progress_baseline"
       secondary: "mode_change"

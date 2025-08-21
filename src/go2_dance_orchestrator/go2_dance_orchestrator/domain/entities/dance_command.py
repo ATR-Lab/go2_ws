@@ -57,7 +57,7 @@ class CommandExecution:
             
             # Method 2: Intelligent timing-based progress (fallback)
             intelligent_durations = {
-                "Hello": 3.0, "FingerHeart": 3.0, "Pose": 4.0, "Stretch": 5.0,
+                "Hello": 3.0, "FingerHeart": 7.0, "Pose": 4.0, "Stretch": 5.0,
                 "Dance1": 18.0, "Dance2": 12.0, "WiggleHips": 6.0, "Content": 8.0,
                 "FrontFlip": 5.0, "FrontJump": 4.0, "FrontPounce": 4.0, "Handstand": 7.0,
                 "Bound": 6.0, "MoonWalk": 8.0, "CrossWalk": 7.0, "OnesidedStep": 5.0,

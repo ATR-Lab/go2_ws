@@ -113,7 +113,7 @@ def main():
         {
             "name": "greeting_sequence", 
             "commands": ["Hello", "FingerHeart"],
-            "expected_duration": 6.0  # 3 + 3 seconds
+            "expected_duration": 10.0  # 3 + 3 seconds
         },
         {
             "name": "performance_routine",

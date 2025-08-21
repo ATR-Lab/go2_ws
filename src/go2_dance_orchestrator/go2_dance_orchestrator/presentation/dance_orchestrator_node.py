@@ -17,7 +17,7 @@ from go2_interfaces.srv import ExecuteSingleCommand, StopDanceRoutine, StartDanc
 from go2_interfaces.msg import CommandExecutionStatus, DanceRoutineStatus
 
 from ..application.services.single_command_tracker import SingleCommandTracker
-from ..application.services.dance_sequence_executor import DanceSequenceExecutor
+from ..application.services.dance_sequence_executor import DanceSequenceExecutor, SequenceStatus
 from ..infrastructure.integration.go2_sdk_bridge import Go2SDKBridge
 from ..domain.entities.dance_command import CommandExecution
 from ..domain.enums.command_status import CommandStatus
@@ -46,6 +46,7 @@ class DanceOrchestratorNode(Node):
         # Dance sequence executor (Phase 2) - reuses the single command tracker
         self.sequence_executor = DanceSequenceExecutor()
         self.sequence_executor.command_tracker = self.command_tracker  # Share the same tracker!
+        self.sequence_executor.orchestrator_notifier = self  # Set orchestrator as notifier
         
         # Connect bridge to the shared tracker
         self.sdk_bridge.set_state_callback(
@@ -57,8 +58,7 @@ class DanceOrchestratorNode(Node):
             self.sdk_bridge.send_dance_command
         )
         
-        # Register orchestrator node's completion callback
-        self.command_tracker.completion_callbacks.append(self._on_command_complete)
+        # Orchestrator will be notified by sequence executor after advancement
         
         # ROS2 Services
         self.execute_command_service = self.create_service(
@@ -136,6 +136,7 @@ class DanceOrchestratorNode(Node):
     def _start_dance_routine_callback(self, request, response):
         """Handle dance routine execution requests"""
         logger.info(f"Received dance routine request: {request.command_sequence}")
+
         
         try:
             # Validate request
@@ -144,10 +145,19 @@ class DanceOrchestratorNode(Node):
                 response.message = "Command sequence cannot be empty"
                 return response
             
+            # Check if already executing
+            current_sequence = self.sequence_executor.get_current_sequence()
+            if current_sequence and current_sequence.status == SequenceStatus.EXECUTING:
+                response.success = False
+                response.message = f"Sequence '{current_sequence.routine_name}' is still executing"
+                return response
+            
             # Generate routine name if not provided
             routine_name = request.routine_name
             if not routine_name:
                 routine_name = f"routine_{int(time.time())}"
+            
+
             
             # Execute sequence
             success = self.sequence_executor.execute_sequence(
@@ -199,8 +209,8 @@ class DanceOrchestratorNode(Node):
             
         return response
         
-    def _on_command_complete(self, execution: CommandExecution):
-        """Handle command completion"""
+    def notify_command_complete(self, execution: CommandExecution):
+        """Handle notification of command completion from sequence executor"""
         logger.info(
             f"Command {execution.command_name} completed - "
             f"Duration: {execution.elapsed_time:.2f}s, "
