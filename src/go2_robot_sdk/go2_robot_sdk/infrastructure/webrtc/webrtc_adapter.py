@@ -206,45 +206,85 @@ class WebRTCAdapter(IRobotDataReceiver, IRobotController):
     def _on_data_channel_message(self, _, msg: Dict[str, Any], robot_id: str) -> None:
         """Handle incoming data channel messages"""
         try:
-            # DEBUG: Log ALL messages to understand what we're receiving
+            # ENHANCED DEBUG: Log ALL messages with full details
             topic = msg.get('topic', 'NO_TOPIC')
-            logger.info(f"🔍 DEBUG - ALL WebRTC Messages from robot {robot_id}:")
+            msg_type = msg.get('type', 'NO_TYPE')
+            data = msg.get('data', {})
+            
+            logger.info(f"🔍 ===== DETAILED WebRTC Message Debug from robot {robot_id} =====")
             logger.info(f"   Topic: '{topic}'")
-            logger.info(f"   Keys: {list(msg.keys())}")
+            logger.info(f"   Type: '{msg_type}'")
+            logger.info(f"   All Keys: {list(msg.keys())}")
             
-            # Look for any sport/response/api related content
+            # Log full message structure for analysis
+            try:
+                full_msg = json.dumps(msg, indent=2, default=str)
+                logger.info(f"   Full Message:\n{full_msg}")
+            except Exception as json_error:
+                logger.info(f"   Full Message (raw): {str(msg)[:1000]}...")
+                logger.info(f"   JSON serialization error: {json_error}")
+            
+            # Enhanced sport/response detection - check multiple places
             msg_str = str(msg).lower()
-            if any(keyword in msg_str for keyword in ['sport', 'response', 'api', '1016', '1022']):
-                # Safe serialization that handles numpy arrays
-                try:
-                    safe_msg = json.dumps(msg, indent=2, default=str)
-                    logger.info(f"🎯 POTENTIAL SPORT MESSAGE: {safe_msg}")
-                except:
-                    logger.info(f"🎯 POTENTIAL SPORT MESSAGE: {str(msg)[:500]}...")
+            topic_lower = topic.lower()
             
-            # Check if this is a sport response message (multiple variations)
+            # Check for sport/response keywords in various parts of the message
+            sport_keywords = ['sport', 'response', 'api', '1001', '1002', '1016', '1022', '1008']
+            found_keywords = [kw for kw in sport_keywords if kw in msg_str]
+            
+            if found_keywords:
+                logger.info(f"🎯 SPORT-RELATED MESSAGE DETECTED!")
+                logger.info(f"   Found keywords: {found_keywords}")
+                logger.info(f"   Topic contains sport/response: {'sport' in topic_lower or 'response' in topic_lower}")
+                
+                # Check data structure for typical response patterns
+                if isinstance(data, dict):
+                    header = data.get('header', {})
+                    identity = header.get('identity', {}) if isinstance(header, dict) else {}
+                    status = header.get('status', {}) if isinstance(header, dict) else {}
+                    
+                    if header:
+                        logger.info(f"   Has header structure: YES")
+                        logger.info(f"   Identity: {identity}")
+                        logger.info(f"   Status: {status}")
+                    else:
+                        logger.info(f"   Has header structure: NO")
+            
+            # Expanded list of potential sport response topics
             potential_sport_topics = [
                 "rt/api/sport/response",
                 "api/sport/response", 
                 "sport/response",
                 "response",
                 "rt/sportresponse",
-                "sportresponse"
+                "sportresponse",
+                "rt/api/response",
+                "rt/response", 
+                "api/response"
             ]
             
-            if topic in potential_sport_topics:
-                logger.info(f"🤖 MATCHED SPORT RESPONSE TOPIC: {topic}")
+            # Also check if topic contains sport/response patterns
+            topic_contains_sport_response = any(pattern in topic_lower for pattern in ['sport', 'response'])
+            
+            if topic in potential_sport_topics or topic_contains_sport_response:
+                logger.info(f"🤖 SPORT RESPONSE TOPIC MATCHED!")
+                logger.info(f"   Matched topic: '{topic}'")
+                logger.info(f"   Topic contains sport/response: {topic_contains_sport_response}")
                 if self.sport_response_callback:
                     logger.info(f"📞 Calling sport response callback...")
                     self.sport_response_callback(msg, robot_id)
-                return
+                else:
+                    logger.warning(f"❌ No sport response callback set!")
+            
+            # Log why this message was NOT considered a sport response
+            logger.info(f"🚫 NOT a sport response - Topic: '{topic}', Keywords found: {found_keywords}")
             
             # Handle other data messages
             if self.data_callback:
-                # Создаем объект RobotData для передачи в callback
-                # Фактическая обработка будет в RobotDataService
                 robot_data = RobotData(robot_id=robot_id, timestamp=0.0)
-                self.data_callback(msg, robot_id)  # Передаем сырые данные для обработки
+                self.data_callback(msg, robot_id)
                 
         except Exception as e:
-            logger.error(f"Error processing data channel message: {e}") 
+            logger.error(f"❌ Error processing data channel message: {e}")
+            import traceback
+            logger.error(f"   Traceback: {traceback.format_exc()}") 
