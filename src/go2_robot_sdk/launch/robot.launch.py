@@ -8,8 +8,9 @@ from launch import LaunchDescription
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
+from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument, GroupAction, ExecuteProcess
 from launch.launch_description_sources import FrontendLaunchDescriptionSource, PythonLaunchDescriptionSource
+from launch_ros.actions import SetRemap
 
 
 class Go2LaunchConfig:
@@ -296,6 +297,67 @@ class Go2NodeFactory:
             'launch', 'foxglove_bridge_launch.xml'
         )
         
+        # Optional: start a Python restamping relay if RESTAMP_RELAY path is provided
+        restamp_script = os.getenv('RESTAMP_RELAY', '')
+        relay_proc = []
+        if restamp_script:
+            relay_proc = [ExecuteProcess(
+                cmd=['python3', restamp_script],
+                name='restamp_nav_actions',
+                output='screen'
+            )]
+        
+        # Nav2 include wrapped with action remaps for BT Navigator
+        nav2_group = GroupAction(actions=[
+            # SetRemap('navigate_to_pose', '/bt_navigator/navigate_to_pose'),
+            # SetRemap('navigate_through_poses', '/bt_navigator/navigate_through_poses'),
+            # SetRemap(src='navigate_to_pose',        dst='/bt_navigator/navigate_to_pose'),
+            # SetRemap(src='/navigate_to_pose',       dst='/bt_navigator/navigate_to_pose'),
+            # SetRemap(src='navigate_through_poses',  dst='/bt_navigator/navigate_through_poses'),
+            # SetRemap(src='/navigate_through_poses', dst='/bt_navigator/navigate_through_poses'),
+            # Base-name attempts (kept; harmless if ignored by Humble bug)
+            SetRemap(src='navigate_to_pose',        dst='/bt_navigator/navigate_to_pose'),
+            SetRemap(src='/navigate_to_pose',       dst='/bt_navigator/navigate_to_pose'),
+            SetRemap(src='navigate_through_poses',  dst='/bt_navigator/navigate_through_poses'),
+            SetRemap(src='/navigate_through_poses', dst='/bt_navigator/navigate_through_poses'),
+
+            # --- Humble-safe: remap all 5 sub-endpoints for NavigateToPose
+            SetRemap(src='navigate_to_pose/_action/send_goal',  dst='/bt_navigator/navigate_to_pose/_action/send_goal'),
+            SetRemap(src='navigate_to_pose/_action/get_result', dst='/bt_navigator/navigate_to_pose/_action/get_result'),
+            SetRemap(src='navigate_to_pose/_action/cancel_goal',dst='/bt_navigator/navigate_to_pose/_action/cancel_goal'),
+            SetRemap(src='navigate_to_pose/_action/feedback',   dst='/bt_navigator/navigate_to_pose/_action/feedback'),
+            SetRemap(src='navigate_to_pose/_action/status',     dst='/bt_navigator/navigate_to_pose/_action/status'),
+            # absolute too (belt & suspenders)
+            SetRemap(src='/navigate_to_pose/_action/send_goal',  dst='/bt_navigator/navigate_to_pose/_action/send_goal'),
+            SetRemap(src='/navigate_to_pose/_action/get_result', dst='/bt_navigator/navigate_to_pose/_action/get_result'),
+            SetRemap(src='/navigate_to_pose/_action/cancel_goal',dst='/bt_navigator/navigate_to_pose/_action/cancel_goal'),
+            SetRemap(src='/navigate_to_pose/_action/feedback',   dst='/bt_navigator/navigate_to_pose/_action/feedback'),
+            SetRemap(src='/navigate_to_pose/_action/status',     dst='/bt_navigator/navigate_to_pose/_action/status'),
+
+            # --- And the 5 sub-endpoints for NavigateThroughPoses
+            SetRemap(src='navigate_through_poses/_action/send_goal',  dst='/bt_navigator/navigate_through_poses/_action/send_goal'),
+            SetRemap(src='navigate_through_poses/_action/get_result', dst='/bt_navigator/navigate_through_poses/_action/get_result'),
+            SetRemap(src='navigate_through_poses/_action/cancel_goal',dst='/bt_navigator/navigate_through_poses/_action/cancel_goal'),
+            SetRemap(src='navigate_through_poses/_action/feedback',   dst='/bt_navigator/navigate_through_poses/_action/feedback'),
+            SetRemap(src='navigate_through_poses/_action/status',     dst='/bt_navigator/navigate_through_poses/_action/status'),
+            SetRemap(src='/navigate_through_poses/_action/send_goal',  dst='/bt_navigator/navigate_through_poses/_action/send_goal'),
+            SetRemap(src='/navigate_through_poses/_action/get_result', dst='/bt_navigator/navigate_through_poses/_action/get_result'),
+            SetRemap(src='/navigate_through_poses/_action/cancel_goal',dst='/bt_navigator/navigate_through_poses/_action/cancel_goal'),
+            SetRemap(src='/navigate_through_poses/_action/feedback',   dst='/bt_navigator/navigate_through_poses/_action/feedback'),
+            SetRemap(src='/navigate_through_poses/_action/status',     dst='/bt_navigator/navigate_through_poses/_action/status'),
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource([
+                    os.path.join(get_package_share_directory('nav2_bringup'),
+                                'launch', 'navigation_launch.py')
+                ]),
+                condition=IfCondition(with_nav2),
+                launch_arguments={
+                    'params_file': self.config.config_paths['nav2'],
+                    'use_sim_time': use_sim_time,
+                }.items(),
+            ),
+        ])
+        
         return [
             # Foxglove Bridge
             IncludeLaunchDescription(
@@ -314,18 +376,10 @@ class Go2NodeFactory:
                     'use_sim_time': use_sim_time,
                 }.items(),
             ),
-            # Nav2
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource([
-                    os.path.join(get_package_share_directory('nav2_bringup'),
-                                'launch', 'navigation_launch.py')
-                ]),
-                condition=IfCondition(with_nav2),
-                launch_arguments={
-                    'params_file': self.config.config_paths['nav2'],
-                    'use_sim_time': use_sim_time,
-                }.items(),
-            ),
+            # Nav2 with BT action remaps
+            nav2_group,
+            # Optional relay (only if RESTAMP_RELAY env var is set)
+            *relay_proc,
         ]
 
 
