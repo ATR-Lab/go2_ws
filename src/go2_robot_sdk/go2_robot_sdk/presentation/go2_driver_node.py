@@ -321,7 +321,14 @@ class Go2DriverNode(Node):
 
                 # Publish via ROS2Publisher
                 self.ros2_publisher.publish_camera_data(robot_data)
-                await asyncio.sleep(0)
+                # Phase 1 Optimization: Remove unnecessary yield on every frame
+                # Only yield occasionally to prevent blocking other coroutines
+                if hasattr(self, '_frame_count'):
+                    self._frame_count += 1
+                else:
+                    self._frame_count = 1
+                if self._frame_count % 10 == 0:  # Yield every 10 frames
+                    await asyncio.sleep(0)
 
             except Exception as e:
                 logger.error(f"Error processing video frame: {e}")
@@ -366,7 +373,9 @@ class Go2DriverNode(Node):
                 # Process WebRTC commands
                 self.webrtc_adapter.process_webrtc_commands(robot_id)
                 
-                await asyncio.sleep(0.1)
+                # Phase 1 Optimization: Increased control loop frequency from 10Hz to 50Hz
+                # This reduces latency by providing more responsive command processing
+                await asyncio.sleep(0.02)
                 
             except Exception as e:
                 self.get_logger().error(f"Error in control loop for robot {robot_id}: {e}")

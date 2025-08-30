@@ -86,34 +86,31 @@ class WebRTCAdapter(IRobotDataReceiver, IRobotController):
 
     def send_command(self, robot_id: str, command: str) -> None:
         """Send command to robot"""
-        logger.info(f"📤 WEBRTC ADAPTER - SENDING COMMAND to robot {robot_id}")
-        logger.info(f"   Command: {command[:200]}...")
+        # Phase 1 Optimization: Reduced logging verbosity in critical command path
+        # Only log at debug level to minimize I/O overhead during high-frequency commands
+        logger.debug(f"Sending command to robot {robot_id}: {command[:50]}...")
         
         if robot_id in self.connections:
             try:
                 connection = self.connections[robot_id]
                 if hasattr(connection, 'data_channel') and connection.data_channel:
-                    logger.info(f"   Data Channel State: {connection.data_channel.readyState}")
                     # Use asyncio.run_coroutine_threadsafe to handle cross-thread calls
                     loop = self._get_or_create_event_loop()
                     if loop and loop.is_running():
-                        logger.info("   Using async send via event loop")
                         # Schedule the coroutine in the existing loop
                         asyncio.run_coroutine_threadsafe(
                             self._async_send_command(connection, command),
                             loop
                         )
                     else:
-                        logger.info("   Using synchronous send")
                         # Fallback to synchronous send
                         connection.data_channel.send(command)
-                    logger.info(f"✅ Command successfully sent to robot {robot_id}")
                 else:
-                    logger.warning(f"❌ No data channel available for robot {robot_id}")
+                    logger.warning(f"No data channel available for robot {robot_id}")
             except Exception as e:
-                logger.error(f"❌ Error sending command to robot {robot_id}: {e}")
+                logger.error(f"Error sending command to robot {robot_id}: {e}")
         else:
-            logger.warning(f"❌ Robot {robot_id} not found in connections")
+            logger.warning(f"Robot {robot_id} not found in connections")
 
     def _get_or_create_event_loop(self):
         """Get existing event loop or return the main loop"""
@@ -128,13 +125,13 @@ class WebRTCAdapter(IRobotDataReceiver, IRobotController):
         """Async wrapper for sending commands"""
         try:
             if hasattr(connection, 'data_channel') and connection.data_channel:
-                logger.info(f"🔄 ASYNC SEND: Sending via data channel...")
+                # Phase 1 Optimization: Removed verbose logging from async send path
+                # Critical performance path should minimize I/O operations
                 connection.data_channel.send(command)
-                logger.info(f"🔄 ASYNC SEND: Message sent successfully")
             else:
-                logger.warning(f"🔄 ASYNC SEND: No data channel available")
+                logger.warning(f"No data channel available in async send")
         except Exception as e:
-            logger.error(f"❌ Error in async send command: {e}")
+            logger.error(f"Error in async send command: {e}")
 
     def send_movement_command(self, robot_id: str, x: float, y: float, z: float) -> None:
         """Send movement command to robot"""
@@ -206,51 +203,16 @@ class WebRTCAdapter(IRobotDataReceiver, IRobotController):
     def _on_data_channel_message(self, _, msg: Dict[str, Any], robot_id: str) -> None:
         """Handle incoming data channel messages"""
         try:
-            # ENHANCED DEBUG: Log ALL messages with full details
+            # Phase 1 Optimization: Drastically reduced logging overhead in critical data path
+            # Original verbose logging was causing significant latency on every message
             topic = msg.get('topic', 'NO_TOPIC')
             msg_type = msg.get('type', 'NO_TYPE')
-            data = msg.get('data', {})
             
-            logger.info(f"🔍 ===== DETAILED WebRTC Message Debug from robot {robot_id} =====")
-            logger.info(f"   Topic: '{topic}'")
-            logger.info(f"   Type: '{msg_type}'")
-            logger.info(f"   All Keys: {list(msg.keys())}")
+            # Only log at debug level for detailed analysis, not every message
+            logger.debug(f"WebRTC message from robot {robot_id}: topic='{topic}', type='{msg_type}'")
             
-            # Log full message structure for analysis
-            try:
-                full_msg = json.dumps(msg, indent=2, default=str)
-                logger.info(f"   Full Message:\n{full_msg}")
-            except Exception as json_error:
-                logger.info(f"   Full Message (raw): {str(msg)[:1000]}...")
-                logger.info(f"   JSON serialization error: {json_error}")
-            
-            # Enhanced sport/response detection - check multiple places
-            msg_str = str(msg).lower()
+            # Efficient sport/response detection without verbose logging
             topic_lower = topic.lower()
-            
-            # Check for sport/response keywords in various parts of the message
-            sport_keywords = ['sport', 'response', 'api', '1001', '1002', '1016', '1022', '1008']
-            found_keywords = [kw for kw in sport_keywords if kw in msg_str]
-            
-            if found_keywords:
-                logger.info(f"🎯 SPORT-RELATED MESSAGE DETECTED!")
-                logger.info(f"   Found keywords: {found_keywords}")
-                logger.info(f"   Topic contains sport/response: {'sport' in topic_lower or 'response' in topic_lower}")
-                
-                # Check data structure for typical response patterns
-                if isinstance(data, dict):
-                    header = data.get('header', {})
-                    identity = header.get('identity', {}) if isinstance(header, dict) else {}
-                    status = header.get('status', {}) if isinstance(header, dict) else {}
-                    
-                    if header:
-                        logger.info(f"   Has header structure: YES")
-                        logger.info(f"   Identity: {identity}")
-                        logger.info(f"   Status: {status}")
-                    else:
-                        logger.info(f"   Has header structure: NO")
-            
-            # Expanded list of potential sport response topics
             potential_sport_topics = [
                 "rt/api/sport/response",
                 "api/sport/response", 
@@ -263,28 +225,19 @@ class WebRTCAdapter(IRobotDataReceiver, IRobotController):
                 "api/response"
             ]
             
-            # Also check if topic contains sport/response patterns
+            # Check if topic contains sport/response patterns
             topic_contains_sport_response = any(pattern in topic_lower for pattern in ['sport', 'response'])
             
             if topic in potential_sport_topics or topic_contains_sport_response:
-                logger.info(f"🤖 SPORT RESPONSE TOPIC MATCHED!")
-                logger.info(f"   Matched topic: '{topic}'")
-                logger.info(f"   Topic contains sport/response: {topic_contains_sport_response}")
+                logger.debug(f"Sport response topic matched: '{topic}'")
                 if self.sport_response_callback:
-                    logger.info(f"📞 Calling sport response callback...")
                     self.sport_response_callback(msg, robot_id)
                 else:
-                    logger.warning(f"❌ No sport response callback set!")
-            
-            # Log why this message was NOT considered a sport response
-            logger.info(f"🚫 NOT a sport response - Topic: '{topic}', Keywords found: {found_keywords}")
+                    logger.warning(f"No sport response callback set for robot {robot_id}")
             
             # Handle other data messages
             if self.data_callback:
-                robot_data = RobotData(robot_id=robot_id, timestamp=0.0)
                 self.data_callback(msg, robot_id)
                 
         except Exception as e:
-            logger.error(f"❌ Error processing data channel message: {e}")
-            import traceback
-            logger.error(f"   Traceback: {traceback.format_exc()}") 
+            logger.error(f"Error processing data channel message from robot {robot_id}: {e}") 
