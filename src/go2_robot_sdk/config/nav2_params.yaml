@@ -147,10 +147,12 @@ controller_server:
     FollowPath:
       plugin: "nav2_mppi_controller::MPPIController"  # Advanced model predictive controller
       motion_model: "Omni"                       # Omnidirectional motion - leverages Go2's capabilities
-      time_steps: 28                             # Prediction horizon steps - long-term planning
-      model_dt: 0.1                             # Time step size (50ms) - smooth prediction
-      batch_size: 3000                           # High quality sampling - external computer can handle 15000+ for better performance
-      # Marcus: Half the velocities (linear and angular) for path following
+      # time_steps: 56                             # Prediction horizon steps - long-term planning
+      time_steps: 28                             # Reduced prediction horizon to match new model_dt
+      # model_dt: 0.05                             # Time step size (50ms) - smooth prediction
+      model_dt: 0.1                              # Time step size (100ms) - matches controller frequency
+      # batch_size: 5000                          # High quality sampling - external computer can handle 15000+ for better performance
+      batch_size: 3000                          # Reduced for better performance with WebRTC      # Marcus: Half the velocities (linear and angular) for path following
       ax_max: 3.0                                # Maximum X acceleration - Go2's dynamic limits
       ax_min: -3.0                               # Minimum X acceleration - deceleration capability
       ay_max: 3.0                                # Maximum Y acceleration - lateral dynamics
@@ -162,7 +164,8 @@ controller_server:
       vx_min: -0.35                              # Minimum X velocity - reverse capability
       vy_max: 0.2                                # Maximum Y velocity - Go2's lateral capability underutilized, can do 0.5+ m/s
       wz_max: 1.9                                # Maximum angular velocity - Go2's turning capability
-      iteration_count: 1                         # MPPI iterations per control cycle - balance quality/speed
+      # iteration_count: 2                         # MPPI iterations per control cycle - balance quality/speed
+      iteration_count: 1                         # Single iteration for better performance
       prune_distance: 1.7                        # Distance to prune invalid trajectories
       transform_tolerance: 0.3                   # Transform timing tolerance
       temperature: 0.3                           # MPPI temperature parameter - exploration vs exploitation
@@ -234,8 +237,10 @@ local_costmap:
   local_costmap:
     ros__parameters:
       # Marcus: changed update and publish frequency to 20.0
-      update_frequency: 10.0                     # High frequency updates for dynamic obstacles
-      publish_frequency: 10.0                    # High frequency publishing for responsive control
+      # update_frequency: 20.0                     # High frequency updates for dynamic obstacles
+      # publish_frequency: 20.0                    # High frequency publishing for responsive control
+      update_frequency: 10.0                     # Reduced for better performance
+      publish_frequency: 10.0                    # Reduced for better performance
       global_frame: odom                         # Use odometry frame for local planning
       robot_base_frame: base_footprint           # Robot's base frame reference
       use_sim_time: False                        # Real-time operation
@@ -300,7 +305,8 @@ local_costmap:
           obstacle_max_range: 2.5                # Maximum range for obstacle detection
           obstacle_min_range: 0.05               # Minimum range for obstacle detection
           # observation_persistence: 0.35
-          observation_persistence: 0.10          # Time to keep observations (100ms)
+          # observation_persistence: 0.10          # Time to keep observations (100ms)
+          observation_persistence: 0.05          # Reduced for faster obstacle clearing
           # expected_update_rate: 0.18
           min_obstacle_height: 0.1               # Minimum obstacle height - Go2 can step over ~8cm obstacles, tune based on environment
           max_obstacle_height: 0.5               # Maximum obstacle height for local planning
