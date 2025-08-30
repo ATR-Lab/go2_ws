@@ -25,6 +25,7 @@ def update_meshes_for_cloud2(
 ) -> np.ndarray:
     """
     Process LiDAR point cloud data for ROS2 PointCloud2 message.
+    Phase 2 Optimization: Reduced array copies and improved memory efficiency
     
     Args:
         positions: Raw position data from LiDAR
@@ -36,30 +37,34 @@ def update_meshes_for_cloud2(
     Returns:
         Processed point cloud array with x,y,z,intensity
     """
-    # Convert positions to numpy array for vectorized operations
-    position_array = np.array(positions).reshape(-1, 3).astype(np.float32)
-
-    # Apply resolution scaling
+    # Phase 2 Optimization: Direct conversion and reshape to minimize copies
+    position_array = np.asarray(positions, dtype=np.float32).reshape(-1, 3)
+    uv_array = np.asarray(uvs, dtype=np.float32).reshape(-1, 2)
+    
+    # Phase 2 Optimization: In-place operations to avoid intermediate arrays
+    # Apply resolution scaling and origin offset in-place
     position_array *= res
-
-    # Apply origin offset
     position_array += origin
-
-    # Convert UV coordinates to numpy array
-    uv_array = np.array(uvs, dtype=np.float32).reshape(-1, 2)
-
-    # Calculate intensities from UV values
-    intensities = np.min(uv_array, axis=1, keepdims=True)
-
-    # Combine positions with intensities
-    positions_with_intensities = np.hstack((position_array, intensities))
-
-    # Filter out points below intensity threshold
-    filtered_points = positions_with_intensities[
-        positions_with_intensities[:, -1] > intense_limiter
-    ]
-
-    # Remove duplicate points
+    
+    # Phase 2 Optimization: Pre-allocate result array to avoid hstack overhead
+    num_points = position_array.shape[0]
+    result_array = np.empty((num_points, 4), dtype=np.float32)
+    
+    # Copy position data directly into result array
+    result_array[:, :3] = position_array
+    
+    # Calculate intensities directly into result array
+    result_array[:, 3] = np.min(uv_array, axis=1)
+    
+    # Phase 2 Optimization: Combined filter and unique operation
+    # Filter points above intensity threshold first for better performance
+    intensity_mask = result_array[:, 3] > intense_limiter
+    if not np.any(intensity_mask):
+        return np.empty((0, 4), dtype=np.float32)  # Return empty array if no points pass filter
+    
+    filtered_points = result_array[intensity_mask]
+    
+    # Remove duplicates only on filtered data (smaller dataset)
     unique_points = np.unique(filtered_points, axis=0)
     
     return unique_points

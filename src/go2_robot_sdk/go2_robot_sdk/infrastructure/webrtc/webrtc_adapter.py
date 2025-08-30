@@ -5,12 +5,19 @@ import asyncio
 import json
 import logging
 from typing import Callable, Dict, Any
+from enum import Enum
 
 from ...domain.interfaces import IRobotDataReceiver, IRobotController
 from ...domain.entities import RobotData, RobotConfig
 from .go2_connection import Go2Connection
 from ...application.utils.command_generator import gen_command, gen_mov_command
 from ...domain.constants import ROBOT_CMD, RTC_TOPIC
+
+class CommandPriority(Enum):
+    """Phase 2 Optimization: Command priority classification for direct bypass system"""
+    CRITICAL = "critical"    # Direct send - movement, emergency, safety
+    HIGH = "high"           # Fast processing - state changes, mode switches  
+    NORMAL = "normal"       # Standard queue - configuration, entertainment
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +31,23 @@ class WebRTCAdapter(IRobotDataReceiver, IRobotController):
         self.data_callback: Callable[[RobotData], None] = None
         self.sport_response_callback: Callable[[Dict[str, Any], str], None] = None
         self.webrtc_msgs = asyncio.Queue()
+        # Phase 2 Optimization: Command priority classification for bypass system
+        self._critical_commands = {
+            1008,  # Move - direct movement commands
+            1003,  # StopMove - emergency stops 
+            1001,  # Damp - safety/damping
+            1006,  # RecoveryStand - emergency recovery
+        }
+        self._high_priority_commands = {
+            1004, 1005,  # StandUp, StandDown - basic state changes
+            1002,  # BalanceStand - stance control
+            1011,  # SwitchGait - movement mode changes
+            1027,  # SwitchJoystick - control mode changes
+        }
+        
+        # Phase 2 Optimization: Async message processing queue
+        # Separates WebRTC callback thread from heavy message processing
+        self._message_processing_queue = asyncio.Queue(maxsize=1000)
         self.on_validated_callback = on_validated_callback
         self.on_video_frame_callback = on_video_frame_callback
         # Store the event loop (passed from main thread or detect current)
@@ -165,12 +189,30 @@ class WebRTCAdapter(IRobotDataReceiver, IRobotController):
         except Exception as e:
             logger.error(f"Error sending stand down command: {e}")
 
+    def _classify_command_priority(self, api_id: int) -> CommandPriority:
+        """Phase 2 Optimization: Classify command priority for bypass system"""
+        if api_id in self._critical_commands:
+            return CommandPriority.CRITICAL
+        elif api_id in self._high_priority_commands:
+            return CommandPriority.HIGH
+        else:
+            return CommandPriority.NORMAL
+
     def send_webrtc_request(self, robot_id: str, api_id: int, parameter: Any, topic: str) -> None:
-        """Send WebRTC request"""
+        """Send WebRTC request with Phase 2 priority-based routing"""
         try:
             payload = gen_command(api_id, parameter, topic)
-            self.webrtc_msgs.put_nowait(payload)
-            logger.debug(f"WebRTC request queued for robot {robot_id}")
+            priority = self._classify_command_priority(api_id)
+            
+            # Phase 2 Optimization: Direct bypass for critical commands
+            # Critical commands (movement, emergency) skip queue for minimum latency
+            if priority == CommandPriority.CRITICAL:
+                logger.debug(f"Critical command {api_id} bypassing queue for robot {robot_id}")
+                self.send_command(robot_id, payload)
+            else:
+                # High and normal priority commands use queue for batched processing
+                self.webrtc_msgs.put_nowait(payload)
+                logger.debug(f"{priority.value.title()} priority command {api_id} queued for robot {robot_id}")
         except Exception as e:
             logger.error(f"Error sending WebRTC request: {e}")
 
@@ -201,43 +243,82 @@ class WebRTCAdapter(IRobotDataReceiver, IRobotController):
             logger.error(f"Error in validated callback: {e}")
 
     def _on_data_channel_message(self, _, msg: Dict[str, Any], robot_id: str) -> None:
-        """Handle incoming data channel messages"""
+        """Handle incoming data channel messages with Phase 2 async processing"""
         try:
-            # Phase 1 Optimization: Drastically reduced logging overhead in critical data path
-            # Original verbose logging was causing significant latency on every message
+            # Phase 2 Optimization: Fast-path message classification and async queuing
+            # Minimize work in WebRTC callback thread - just classify and queue
             topic = msg.get('topic', 'NO_TOPIC')
-            msg_type = msg.get('type', 'NO_TYPE')
             
-            # Only log at debug level for detailed analysis, not every message
-            logger.debug(f"WebRTC message from robot {robot_id}: topic='{topic}', type='{msg_type}'")
-            
-            # Efficient sport/response detection without verbose logging
+            # Fast classification without heavy processing
             topic_lower = topic.lower()
-            potential_sport_topics = [
-                "rt/api/sport/response",
-                "api/sport/response", 
-                "sport/response",
-                "response",
-                "rt/sportresponse",
-                "sportresponse",
-                "rt/api/response",
-                "rt/response", 
-                "api/response"
-            ]
+            is_sport_response = any(pattern in topic_lower for pattern in ['sport', 'response'])
             
-            # Check if topic contains sport/response patterns
-            topic_contains_sport_response = any(pattern in topic_lower for pattern in ['sport', 'response'])
+            # Queue message for async processing instead of blocking WebRTC thread
+            message_data = {
+                'msg': msg,
+                'robot_id': robot_id,
+                'topic': topic,
+                'is_sport_response': is_sport_response
+            }
             
-            if topic in potential_sport_topics or topic_contains_sport_response:
-                logger.debug(f"Sport response topic matched: '{topic}'")
-                if self.sport_response_callback:
-                    self.sport_response_callback(msg, robot_id)
-                else:
-                    logger.warning(f"No sport response callback set for robot {robot_id}")
+            # Non-blocking queue put with fallback if queue is full
+            try:
+                self._message_processing_queue.put_nowait(message_data)
+                logger.debug(f"Message queued for async processing: {topic}")
+            except asyncio.QueueFull:
+                # Drop oldest message to prevent blocking - prioritize real-time performance
+                try:
+                    self._message_processing_queue.get_nowait()
+                    self._message_processing_queue.put_nowait(message_data)
+                    logger.warning(f"Message queue full - dropped oldest message for {robot_id}")
+                except asyncio.QueueEmpty:
+                    pass  # Queue became empty, our message should fit now
+                
+        except Exception as e:
+            logger.error(f"Error in fast-path message processing for robot {robot_id}: {e}")
+
+    async def _process_message_queue_worker(self) -> None:
+        """Phase 2 Optimization: Async worker for processing queued messages"""
+        while True:
+            try:
+                # Wait for message from queue
+                message_data = await self._message_processing_queue.get()
+                
+                # Process the message with full logic (moved from callback)
+                await self._process_queued_message(message_data)
+                
+                # Mark task as done
+                self._message_processing_queue.task_done()
+                
+            except Exception as e:
+                logger.error(f"Error in message queue worker: {e}")
+                # Continue processing other messages
+                
+    async def _process_queued_message(self, message_data: Dict[str, Any]) -> None:
+        """Phase 2 Optimization: Process individual queued message asynchronously"""
+        try:
+            msg = message_data['msg']
+            robot_id = message_data['robot_id']
+            topic = message_data['topic']
+            is_sport_response = message_data['is_sport_response']
+            
+            # Handle sport response messages
+            if is_sport_response:
+                potential_sport_topics = [
+                    "rt/api/sport/response", "api/sport/response", "sport/response",
+                    "response", "rt/sportresponse", "sportresponse",
+                    "rt/api/response", "rt/response", "api/response"
+                ]
+                
+                if topic.lower() in [t.lower() for t in potential_sport_topics]:
+                    if self.sport_response_callback:
+                        self.sport_response_callback(msg, robot_id)
+                    else:
+                        logger.warning(f"No sport response callback set for robot {robot_id}")
             
             # Handle other data messages
             if self.data_callback:
                 self.data_callback(msg, robot_id)
                 
         except Exception as e:
-            logger.error(f"Error processing data channel message from robot {robot_id}: {e}") 
+            logger.error(f"Error processing queued message for robot {robot_id}: {e}") 

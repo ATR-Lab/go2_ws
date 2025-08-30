@@ -124,7 +124,14 @@ class Go2DriverNode(Node):
 
     def _setup_publishers(self) -> Dict[str, list]:
         """ROS2 publishers setup"""
+        # Phase 2 Optimization: Navigation-safe QoS profiles
+        # Keep RELIABLE QoS for Nav2-critical topics (odometry, joint_states, imu)
         qos_profile = QoSProfile(depth=10)
+        
+        # Phase 2 Optimization: Reduced depth for robot state - safe for latency improvement
+        # Robot state doesn't need deep buffering like Nav2-critical topics
+        robot_state_qos = QoSProfile(depth=3)
+        
         best_effort_qos = QoSProfile(
             reliability=QoSReliabilityPolicy.BEST_EFFORT,
             history=QoSHistoryPolicy.KEEP_LAST,
@@ -170,7 +177,7 @@ class Go2DriverNode(Node):
             publishers['joint_state'].append(
                 self.create_publisher(JointState, joint_topic, qos_profile))
             publishers['robot_state'].append(
-                self.create_publisher(Go2State, robot_state_topic, qos_profile))
+                self.create_publisher(Go2State, robot_state_topic, robot_state_qos))
             publishers['lidar'].append(
                 self.create_publisher(
                     PointCloud2, lidar_topic, best_effort_qos,

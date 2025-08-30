@@ -27,6 +27,11 @@ async def run_robot_connections(node: Go2DriverNode):
             task = asyncio.create_task(node.run_robot_control_loop(robot_id))
             tasks.append(task)
 
+        # Phase 2 Optimization: Start async message processing worker
+        # Processes WebRTC messages asynchronously to reduce callback thread blocking
+        message_worker_task = asyncio.create_task(node.webrtc_adapter._process_message_queue_worker())
+        tasks.append(message_worker_task)
+
         # Wait for all tasks to complete
         await asyncio.gather(*tasks)
 

@@ -15,6 +15,10 @@ from typing import Any, Dict, Optional, Union
 SPORT_MODE_TOPIC = "rt/api/sport/request"
 OBSTACLE_AVOIDANCE_TOPIC = "rt/api/obstacles_avoid/request"
 
+# Phase 2 Optimization: Command cache for common static commands
+# Reduces JSON serialization overhead for frequently used commands
+_COMMAND_CACHE: Dict[tuple, str] = {}
+
 
 def generate_id() -> int:
     """Generate a unique command ID based on timestamp and random number"""
@@ -68,7 +72,7 @@ def gen_command(
         command_id: Optional[int] = None
 ) -> str:
     """
-    Generate a general robot command.
+    Generate a general robot command with Phase 2 caching optimization.
     
     Args:
         cmd: Command ID from ROBOT_CMD constants
@@ -79,6 +83,22 @@ def gen_command(
     Returns:
         JSON string of the formatted command
     """
+    # Phase 2 Optimization: Cache static commands (no variable parameters)
+    # Common commands like StandUp, StandDown don't need repeated serialization
+    if parameters is None and command_id is None and topic is None:
+        cache_key = (cmd, SPORT_MODE_TOPIC)
+        if cache_key not in _COMMAND_CACHE:
+            parameter = str(cmd)
+            command = create_command_structure(
+                api_id=cmd,
+                parameter=parameter,
+                topic=SPORT_MODE_TOPIC,
+                command_id=0,  # Use 0 for cached commands to avoid ID conflicts
+            )
+            _COMMAND_CACHE[cache_key] = json.dumps(command)
+        return _COMMAND_CACHE[cache_key]
+    
+    # Dynamic commands with variable parameters - generate normally
     parameter = parameters if parameters is not None else str(cmd)
     command = create_command_structure(
         api_id=cmd,
