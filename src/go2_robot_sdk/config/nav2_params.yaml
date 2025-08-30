@@ -13,31 +13,31 @@ amcl:
     do_beamskip: false                              # Disable beam skipping for better accuracy with Go2's lidar
     global_frame_id: "map"                          # Global reference frame for localization - SLAM-based navigation
     lambda_short: 0.1                               # Likelihood of short readings - handle reflective surfaces
-    laser_likelihood_max_dist: 2.0                  # Max distance for likelihood calculation - computational efficiency
-    laser_max_range: 100.0                          # Maximum laser range to consider - full lidar capability
+    laser_likelihood_max_dist: 4.0                  # Max distance for likelihood calculation - computational efficiency
+    laser_max_range: 30.0                           # Maximum laser range to consider - full lidar capability
     laser_min_range: -1.0                           # Minimum laser range (-1 means use sensor's minimum)
     laser_model_type: "likelihood_field"            # Laser sensor model - efficient for indoor navigation
-    max_beams: 60                                   # Maximum laser beams to use - balance accuracy vs computation
-    max_particles: 2000                             # Maximum particles in filter - localization precision vs CPU
+    max_beams: 120                                  # Maximum laser beams to use - balance accuracy vs computation
+    max_particles: 1500                             # Maximum particles in filter - localization precision vs CPU
     min_particles: 500                              # Minimum particles in filter - maintain localization robustness
     odom_frame_id: "odom"                           # Odometry frame - Go2's wheel/IMU odometry reference
     pf_err: 0.05                                    # Particle filter error tolerance - localization confidence
     pf_z: 0.99                                      # Particle filter confidence - higher = more conservative
     recovery_alpha_fast: 0.0                        # Fast recovery parameter - disabled for stability
     recovery_alpha_slow: 0.0                        # Slow recovery parameter - disabled for stability  
-    resample_interval: 1                            # Resample particles every N updates - computational efficiency
+    resample_interval: 2                            # Resample particles every N updates - computational efficiency
     robot_model_type: "nav2_amcl::OmniMotionModel"  # Motion model - suitable for Go2's omnidirectional capability
     save_pose_rate: 0.5                             # Rate to save pose estimates - logging frequency
     sigma_hit: 0.2                                  # Standard deviation of hit measurements - sensor noise
     tf_broadcast: true                              # Broadcast transform - required for navigation stack
     transform_tolerance: 0.3                        # Transform timing tolerance - accounts for WebRTC latency (~100-200ms)
-    update_min_a: 0.2                               # Minimum angular movement to trigger update - efficiency
-    update_min_d: 0.25                              # Minimum linear movement to trigger update - Go2 step size
+    update_min_a: 0.05                              # Minimum angular movement to trigger update - efficiency
+    update_min_d: 0.1                               # Minimum linear movement to trigger update - Go2 step size
     z_hit: 0.5                                      # Weight of accurate measurements - sensor reliability
     z_max: 0.05                                     # Weight of max range readings - handle open spaces
     z_rand: 0.1                                     # Weight of random measurements - unexpected obstacles
     z_short: 0.05                                   # Weight of short readings - reflections/noise
-    scan_topic: scan                                # Laser scan topic name - input sensor data
+    scan_topic: scan_restamped                      # Laser scan topic name - input sensor data
 
 bt_navigator:
   ros__parameters:
@@ -147,9 +147,9 @@ controller_server:
     FollowPath:
       plugin: "nav2_mppi_controller::MPPIController"  # Advanced model predictive controller
       motion_model: "Omni"                       # Omnidirectional motion - leverages Go2's capabilities
-      time_steps: 56                             # Prediction horizon steps - long-term planning
-      model_dt: 0.05                             # Time step size (50ms) - smooth prediction
-      batch_size: 10000                          # High quality sampling - external computer can handle 15000+ for better performance
+      time_steps: 28                             # Prediction horizon steps - long-term planning
+      model_dt: 0.1                             # Time step size (50ms) - smooth prediction
+      batch_size: 3000                           # High quality sampling - external computer can handle 15000+ for better performance
       # Marcus: Half the velocities (linear and angular) for path following
       ax_max: 3.0                                # Maximum X acceleration - Go2's dynamic limits
       ax_min: -3.0                               # Minimum X acceleration - deceleration capability
@@ -162,7 +162,7 @@ controller_server:
       vx_min: -0.35                              # Minimum X velocity - reverse capability
       vy_max: 0.2                                # Maximum Y velocity - Go2's lateral capability underutilized, can do 0.5+ m/s
       wz_max: 1.9                                # Maximum angular velocity - Go2's turning capability
-      iteration_count: 2                         # MPPI iterations per control cycle - balance quality/speed
+      iteration_count: 1                         # MPPI iterations per control cycle - balance quality/speed
       prune_distance: 1.7                        # Distance to prune invalid trajectories
       transform_tolerance: 0.3                   # Transform timing tolerance
       temperature: 0.3                           # MPPI temperature parameter - exploration vs exploitation
@@ -234,8 +234,8 @@ local_costmap:
   local_costmap:
     ros__parameters:
       # Marcus: changed update and publish frequency to 20.0
-      update_frequency: 20.0                     # High frequency updates for dynamic obstacles
-      publish_frequency: 20.0                    # High frequency publishing for responsive control
+      update_frequency: 10.0                     # High frequency updates for dynamic obstacles
+      publish_frequency: 10.0                    # High frequency publishing for responsive control
       global_frame: odom                         # Use odometry frame for local planning
       robot_base_frame: base_footprint           # Robot's base frame reference
       use_sim_time: False                        # Real-time operation
