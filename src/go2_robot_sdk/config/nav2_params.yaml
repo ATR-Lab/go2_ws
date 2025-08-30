@@ -30,7 +30,7 @@ amcl:
     save_pose_rate: 0.5                             # Rate to save pose estimates - logging frequency
     sigma_hit: 0.2                                  # Standard deviation of hit measurements - sensor noise
     tf_broadcast: true                              # Broadcast transform - required for navigation stack
-    transform_tolerance: 0.3                        # Transform timing tolerance - accounts for WebRTC latency (~100-200ms)
+    transform_tolerance: 0.6                        # Transform timing tolerance - accounts for WebRTC latency (~100-200ms)
     update_min_a: 0.05                              # Minimum angular movement to trigger update - efficiency
     update_min_d: 0.1                               # Minimum linear movement to trigger update - Go2 step size
     z_hit: 0.5                                      # Weight of accurate measurements - sensor reliability
@@ -52,7 +52,7 @@ bt_navigator:
     bt_loop_duration: 10                         # Behavior tree execution frequency (10ms) - may be too aggressive for WebRTC
     default_server_timeout: 20                   # Default action server timeout - allow complex maneuvers
     tf_buffer_duration: 50.0                     # Transform buffer size - handle timing issues
-    transform_tolerance: 0.3                     # Transform timing tolerance - must account for WebRTC latency
+    transform_tolerance: 0.6                     # Transform timing tolerance - must account for WebRTC latency
     # 'default_nav_through_poses_bt_xml' and 'default_nav_to_pose_bt_xml' are use defaults:
     # nav2_bt_navigator/navigate_to_pose_w_replanning_and_recovery.xml
     # nav2_bt_navigator/navigate_through_poses_w_replanning_and_recovery.xml
@@ -116,8 +116,9 @@ bt_navigator_navigate_to_pose_rclcpp_node:
 controller_server:
   ros__parameters:
     tf_buffer_duration: 50.0                     # Large TF buffer essential for WebRTC timing robustness
-    transform_tolerance: 0.3                     # Transform synchronization tolerance
-    controller_frequency: 20.0                   # Control loop frequency - may need reduction to 10-15Hz for WebRTC stability
+    transform_tolerance: 0.6                     # Transform synchronization tolerance
+    # controller_frequency: 20.0                   # Control loop frequency - may need reduction to 10-15Hz for WebRTC stability
+    controller_frequency: 10.0                   # Control loop frequency - matches model_dt 0.1s to prevent timing issues, slightly less responsive control but more stable
     costmap_update_timeout: 0.30                 # Timeout for costmap updates - may need increase for WebRTC delays
     min_x_velocity_threshold: 0.001              # Minimum X velocity considered as movement
     min_y_velocity_threshold: 0.001              # Minimum Y velocity considered as movement  
@@ -167,7 +168,7 @@ controller_server:
       # iteration_count: 2                         # MPPI iterations per control cycle - balance quality/speed
       iteration_count: 1                         # Single iteration for better performance
       prune_distance: 1.7                        # Distance to prune invalid trajectories
-      transform_tolerance: 0.3                   # Transform timing tolerance
+      transform_tolerance: 0.6                   # Transform timing tolerance
       temperature: 0.3                           # MPPI temperature parameter - exploration vs exploitation
       gamma: 0.015                               # Discount factor for future costs
       visualize: true                            # Enable trajectory visualization in RViz
@@ -397,10 +398,11 @@ smoother_server:
 planner_server:
   ros__parameters:
     use_sim_time: False                         # Real-time operation for path planning
-    expected_planner_frequency: 2.0             # Conservative for external computer - could increase to 3-5Hz for better replanning
+    # expected_planner_frequency: 2.0             # Conservative for external computer - could increase to 3-5Hz for better replanning
+    expected_planner_frequency: 3.0             # Conservative for external computer - could increase to 3-5Hz for better replanning
     planner_plugins: ["GridBased"]              # Available planning algorithms
     tf_buffer_duration: 50.0                    # Large TF buffer for timing robustness
-    transform_tolerance: 0.3                    # Transform synchronization tolerance
+    transform_tolerance: 0.6                    # Transform synchronization tolerance
 
     GridBased:
       plugin: "nav2_smac_planner/SmacPlanner2D" # 2D grid-based planner
@@ -421,7 +423,7 @@ behavior_server:
     global_footprint_topic: global_costmap/published_footprint # Global footprint topic
     cycle_frequency: 10.0                      # Behavior execution frequency
     tf_buffer_duration: 50.0                   # Large TF buffer duration
-    transform_tolerance: 0.3                   # Transform timing tolerance
+    transform_tolerance: 0.6                   # Transform timing tolerance
     behavior_plugins: ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]  # Available recovery behaviors
     spin:
       plugin: "nav2_behaviors/Spin"             # In-place rotation behavior
@@ -492,7 +494,7 @@ collision_monitor:
     cmd_vel_in_topic: "cmd_vel_smoothed"       # Input velocity commands (post-smoothing)
     cmd_vel_out_topic: "cmd_vel"               # Output velocity commands (post-monitoring)
     state_topic: "collision_monitor_state"     # Monitor state topic
-    transform_tolerance: 0.05                  # Tight transform tolerance for safety
+    transform_tolerance: 0.6                   # Tight transform tolerance for safety
     source_timeout: 1.0                        # Sensor data timeout
     base_shift_correction: True                # Correct for base frame shifts
     stop_pub_timeout: 2.0                      # Timeout for stop commands
