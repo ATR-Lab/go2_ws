@@ -82,9 +82,7 @@ class Go2Connection:
     
     def on_data_channel_open(self) -> None:
         """Handle data channel open event"""
-        logger.info(f"🚀 DATA CHANNEL OPENED - Robot {self.robot_num} ready to send/receive")
-        logger.info(f"   Data channel state: {self.data_channel.readyState}")
-        logger.info(f"   Data channel ID: {getattr(self.data_channel, 'id', 'N/A')}")
+        logger.info("Data channel is open")
         
         # Force data channel to open state if needed (workaround)
         if self.data_channel.readyState != "open":
@@ -96,18 +94,6 @@ class Go2Connection:
     def on_data_channel_message(self, message: Union[str, bytes]) -> None:
         """Handle incoming data channel messages"""
         try:
-            # ENHANCED DEBUG: Log ALL data channel activity
-            if isinstance(message, str):
-                logger.info(f"🔔 DATA CHANNEL STRING MESSAGE: {message[:200]}...")
-            elif isinstance(message, bytes):
-                logger.info(f"🔔 DATA CHANNEL BINARY MESSAGE: {len(message)} bytes")
-                # Try to peek at the content
-                try:
-                    preview = str(message[:100])
-                    logger.info(f"🔍 Binary preview: {preview}")
-                except:
-                    logger.info("🔍 Binary data (not displayable)")
-            
             logger.debug(f"Received message: {message}")
             
             # Ensure data channel is marked as open
@@ -190,11 +176,7 @@ class Go2Connection:
             }
             
             payload_str = json.dumps(payload)
-            logger.info(f"📤 SENDING WebRTC MESSAGE:")
-            logger.info(f"   Topic: {topic}")
-            logger.info(f"   Type: {msg_type}")
-            logger.info(f"   Data: {str(data)[:200]}...")
-            logger.info(f"   Channel State: {self.data_channel.readyState}")
+            logger.info(f"-> Sending message {payload_str}")
             self.data_channel.send(payload_str)
             
         except Exception as e:

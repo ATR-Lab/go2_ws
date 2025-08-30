@@ -35,23 +35,14 @@ class RobotControlService:
 
     def handle_webrtc_request(self, api_id: int, parameter_str: str, topic: str, msg_id: str, robot_id: str) -> None:
         """Process WebRTC request"""
-        logger.info(f"🚀 ROBOT CONTROL SERVICE - Processing WebRTC request:")
-        logger.info(f"   API ID: {api_id}")
-        logger.info(f"   Topic: {topic}")
-        logger.info(f"   Message ID: {msg_id}")
-        logger.info(f"   Parameter (raw): {parameter_str[:200]}...")
-        
         try:
             parameter = "" if parameter_str == "" else json.loads(parameter_str)
-            logger.info(f"   Parameter (parsed): {str(parameter)[:200]}...")
-            
-            logger.info(f"📡 Sending to WebRTC controller...")
             self.controller.send_webrtc_request(robot_id, api_id, parameter, topic)
-            logger.info(f"✅ WebRTC request sent successfully to robot {robot_id}")
+            logger.info(f"WebRTC request sent to robot {robot_id}")
         except ValueError as e:
-            logger.error(f"❌ Invalid JSON in WebRTC request: {e}")
+            logger.error(f"Invalid JSON in WebRTC request: {e}")
         except Exception as e:
-            logger.error(f"❌ Error handling WebRTC request: {e}")
+            logger.error(f"Error handling WebRTC request: {e}")
 
     def handle_joy_command(self, joy_buttons: list, robot_id: str) -> None:
         """Process joystick commands"""

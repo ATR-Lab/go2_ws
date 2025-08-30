@@ -23,7 +23,6 @@ from nav_msgs.msg import Odometry
 
 from ..domain.entities import RobotConfig, RobotData, CameraData
 from ..application.services import RobotDataService, RobotControlService
-from ..application.services.sport_response_service import SportResponseService
 from ..infrastructure.ros2 import ROS2Publisher
 from ..infrastructure.webrtc import WebRTCAdapter
 
@@ -56,7 +55,6 @@ class Go2DriverNode(Node):
         )
         
         self.robot_data_service = RobotDataService(self.ros2_publisher)
-        self.sport_response_service = SportResponseService()
         
         self.webrtc_adapter = WebRTCAdapter(
             config=self.config,
@@ -69,8 +67,6 @@ class Go2DriverNode(Node):
         
         # Set callback for data
         self.webrtc_adapter.set_data_callback(self._on_robot_data_received)
-        # Set callback for sport responses
-        self.webrtc_adapter.set_sport_response_callback(self.sport_response_service.handle_sport_response)
         
         # Subscribers initialization
         self._setup_subscribers()
@@ -271,18 +267,9 @@ class Go2DriverNode(Node):
 
     def _on_webrtc_req(self, msg: WebRtcReq, robot_id: str) -> None:
         """Callback for WebRTC requests"""
-        self.get_logger().info(f"🎯 WEBRTC REQUEST RECEIVED:")
-        self.get_logger().info(f"   Robot ID: {robot_id}")
-        self.get_logger().info(f"   API ID: {msg.api_id}")
-        self.get_logger().info(f"   Topic: {msg.topic}")
-        self.get_logger().info(f"   Parameter: {msg.parameter[:200]}...")
-        self.get_logger().info(f"   Message ID: {msg.id}")
-        
         self.robot_control_service.handle_webrtc_request(
             msg.api_id, msg.parameter, msg.topic, msg.id, robot_id
         )
-        
-        self.get_logger().info(f"✅ WEBRTC REQUEST PROCESSED for robot {robot_id}")
 
     def _on_joy(self, msg: Joy) -> None:
         """Callback for joystick"""
