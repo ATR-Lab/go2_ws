@@ -30,7 +30,7 @@ amcl:
     save_pose_rate: 0.5                             # Rate to save pose estimates - logging frequency
     sigma_hit: 0.2                                  # Standard deviation of hit measurements - sensor noise
     tf_broadcast: true                              # Broadcast transform - required for navigation stack
-    transform_tolerance: 0.3                        # Transform timing tolerance - sync with other components
+    transform_tolerance: 0.3                        # Transform timing tolerance - accounts for WebRTC latency (~100-200ms)
     update_min_a: 0.2                               # Minimum angular movement to trigger update - efficiency
     update_min_d: 0.25                              # Minimum linear movement to trigger update - Go2 step size
     z_hit: 0.5                                      # Weight of accurate measurements - sensor reliability
@@ -49,10 +49,10 @@ bt_navigator:
     global_frame: map                            # Global coordinate frame - map-based navigation
     robot_base_frame: base_footprint             # Robot's base frame for planning
     odom_topic: odom                             # Odometry topic for dead reckoning
-    bt_loop_duration: 10                         # Behavior tree execution frequency (10ms) - responsive control
+    bt_loop_duration: 10                         # Behavior tree execution frequency (10ms) - may be too aggressive for WebRTC
     default_server_timeout: 20                   # Default action server timeout - allow complex maneuvers
     tf_buffer_duration: 50.0                     # Transform buffer size - handle timing issues
-    transform_tolerance: 0.3                     # Transform timing tolerance - synchronization
+    transform_tolerance: 0.3                     # Transform timing tolerance - must account for WebRTC latency
     # 'default_nav_through_poses_bt_xml' and 'default_nav_to_pose_bt_xml' are use defaults:
     # nav2_bt_navigator/navigate_to_pose_w_replanning_and_recovery.xml
     # nav2_bt_navigator/navigate_through_poses_w_replanning_and_recovery.xml
@@ -115,10 +115,10 @@ bt_navigator_navigate_to_pose_rclcpp_node:
 
 controller_server:
   ros__parameters:
-    tf_buffer_duration: 50.0                     # Large TF buffer for timing robustness
+    tf_buffer_duration: 50.0                     # Large TF buffer essential for WebRTC timing robustness
     transform_tolerance: 0.3                     # Transform synchronization tolerance
-    controller_frequency: 20.0                   # Control loop frequency - smooth motion for Go2
-    costmap_update_timeout: 0.30                 # Timeout for costmap updates - real-time performance
+    controller_frequency: 20.0                   # Control loop frequency - may need reduction to 10-15Hz for WebRTC stability
+    costmap_update_timeout: 0.30                 # Timeout for costmap updates - may need increase for WebRTC delays
     min_x_velocity_threshold: 0.001              # Minimum X velocity considered as movement
     min_y_velocity_threshold: 0.001              # Minimum Y velocity considered as movement  
     min_theta_velocity_threshold: 0.001          # Minimum rotational velocity threshold
@@ -142,14 +142,14 @@ controller_server:
     general_goal_checker:
       stateful: True                                # Maintain state between checks
       plugin: "nav2_controller::SimpleGoalChecker"  # Simple goal achievement check
-      xy_goal_tolerance: 0.35                       # Position tolerance for goal - suitable for Go2 size
-      yaw_goal_tolerance: 0.35                      # Orientation tolerance (~20 degrees) - practical for quadruped
+      xy_goal_tolerance: 0.35                       # Position tolerance - may be too loose for precise patrol waypoints (consider 0.15-0.25)
+      yaw_goal_tolerance: 0.35                      # Orientation tolerance - may be too loose for directional patrol tasks
     FollowPath:
       plugin: "nav2_mppi_controller::MPPIController"  # Advanced model predictive controller
       motion_model: "Omni"                       # Omnidirectional motion - leverages Go2's capabilities
       time_steps: 56                             # Prediction horizon steps - long-term planning
       model_dt: 0.05                             # Time step size (50ms) - smooth prediction
-      batch_size: 10000                          # Number of trajectories sampled - high quality but CPU intensive
+      batch_size: 10000                          # High quality sampling - external computer can handle 15000+ for better performance
       # Marcus: Half the velocities (linear and angular) for path following
       ax_max: 3.0                                # Maximum X acceleration - Go2's dynamic limits
       ax_min: -3.0                               # Minimum X acceleration - deceleration capability
@@ -158,9 +158,9 @@ controller_server:
       vx_std: 0.15                               # X velocity noise std dev - motion uncertainty
       vy_std: 0.08                               # Y velocity noise std dev - lateral uncertainty
       wz_std: 0.4                                # Angular velocity noise std dev - rotation uncertainty
-      vx_max: 0.5                                # Maximum X velocity - conservative for safety
+      vx_max: 0.5                                # Maximum X velocity - Go2 can safely do 1.2+ m/s for faster patrol
       vx_min: -0.35                              # Minimum X velocity - reverse capability
-      vy_max: 0.2                                # Maximum Y velocity - limited lateral speed
+      vy_max: 0.2                                # Maximum Y velocity - Go2's lateral capability underutilized, can do 0.5+ m/s
       wz_max: 1.9                                # Maximum angular velocity - Go2's turning capability
       iteration_count: 2                         # MPPI iterations per control cycle - balance quality/speed
       prune_distance: 1.7                        # Distance to prune invalid trajectories
@@ -302,7 +302,7 @@ local_costmap:
           # observation_persistence: 0.35
           observation_persistence: 0.10          # Time to keep observations (100ms)
           # expected_update_rate: 0.18
-          min_obstacle_height: 0.1               # Minimum obstacle height - Go2 can step over small objects
+          min_obstacle_height: 0.1               # Minimum obstacle height - Go2 can step over ~8cm obstacles, tune based on environment
           max_obstacle_height: 0.5               # Maximum obstacle height for local planning
 
       inflation_layer:
@@ -391,7 +391,7 @@ smoother_server:
 planner_server:
   ros__parameters:
     use_sim_time: False                         # Real-time operation for path planning
-    expected_planner_frequency: 2.0             # Expected planning frequency (2 Hz)
+    expected_planner_frequency: 2.0             # Conservative for external computer - could increase to 3-5Hz for better replanning
     planner_plugins: ["GridBased"]              # Available planning algorithms
     tf_buffer_duration: 50.0                    # Large TF buffer for timing robustness
     transform_tolerance: 0.3                    # Transform synchronization tolerance
@@ -403,7 +403,7 @@ planner_server:
       tolerance: 0.1                            # Goal tolerance for planning
       motion_model_for_search: "MOORE"          # 8-connected grid search
       use_astar: false                          # Use Dijkstra instead of A*
-      max_iterations: 200000                    # Maximum search iterations
+      max_iterations: 200000                    # Maximum search iterations - external computer can handle higher for complex paths
       minimum_turning_radius: 0.0               # Not used for 2D planning
       analytic_expansion: true                  # Enable analytic path expansion near goal
 
@@ -440,12 +440,12 @@ behavior_server:
     # Marcus changed from 0.1 to 2.0
     use_sim_time: False                        # Real-time operation
     simulate_ahead_time: 2.0                   # Simulation lookahead time
-     # Marcus: changed from 1.0 to 0.5
-    max_rotational_vel: 0.1                    # Maximum rotational velocity - very conservative
-    # Marcus: changed from 0.4 to 0.2
-    min_rotational_vel: 0.1                    # Minimum rotational velocity - matches max (fixed speed)
-     # Marcus: changed from 3.2 to 1.0
-    rotational_acc_lim: 0.1                    # Rotational acceleration limit - very conservative
+           # Marcus: changed from 1.0 to 0.5
+      max_rotational_vel: 0.1                    # Maximum rotational velocity - extremely conservative, Go2 can do 1.5+ rad/s
+     # Marcus: changed from 0.4 to 0.2
+      min_rotational_vel: 0.1                    # Minimum rotational velocity - matches max (fixed speed)
+      # Marcus: changed from 3.2 to 1.0
+      rotational_acc_lim: 0.1                    # Rotational acceleration limit - very conservative, Go2 can handle 2.0+ rad/s²
 
 robot_state_publisher:
   ros__parameters:
@@ -456,12 +456,12 @@ waypoint_follower:
     use_sim_time: False                        # Real-time operation for waypoint following
     loop_rate: 20                              # High frequency waypoint processing
     action_server_result_timeout: 900.0        # Long timeout for complex waypoint missions
-    stop_on_failure: false                     # Continue to next waypoint on failure
+    stop_on_failure: false                     # Continue to next waypoint on failure - good for autonomous patrol
     waypoint_task_executor_plugin: "wait_at_waypoint"  # Task to execute at each waypoint
     wait_at_waypoint:
       plugin: "nav2_waypoint_follower::WaitAtWaypoint"  # Wait behavior at waypoints
       enabled: True                            # Enable waypoint waiting
-      waypoint_pause_duration: 200             # Wait duration at each waypoint (ms)
+      waypoint_pause_duration: 200             # Very short pause - consider 2000-5000ms for patrol inspection tasks
 
 # Marcus: added velocity_smoother
 velocity_smoother:
@@ -469,7 +469,7 @@ velocity_smoother:
     smoothing_frequency: 20.0                  # High frequency velocity smoothing
     scale_velocities: False                    # Don't scale velocities proportionally
     feedback: "OPEN_LOOP"                      # Open loop control (no odometry feedback)
-    max_velocity: [0.5, 0.5, 2.0]              # Maximum velocities [x, y, theta] - conservative linear, normal rotation
+    max_velocity: [0.5, 0.5, 2.0]              # Maximum velocities [x, y, theta] - Go2 can do [1.2, 0.8, 3.0] for faster operation
     min_velocity: [-0.5, -0.5, -2.0]           # Minimum velocities (reverse capability)
     max_accel: [0.3, 0.3, 3.2]                 # Maximum accelerations - smooth acceleration for Go2
     max_decel: [-0.5, -0.5, -3.2]              # Maximum decelerations - quick stopping capability
@@ -495,7 +495,7 @@ collision_monitor:
       type: "polygon"                          # Polygon-based collision detection
       action_type: "approach"                  # Slow down when approaching obstacles
       footprint_topic: "/local_costmap/published_footprint"  # Robot footprint source
-      time_before_collision: 1.1               # Time horizon for collision prediction
+      time_before_collision: 1.1               # Time horizon for collision prediction - accounts for WebRTC latency
       simulation_time_step: 0.1                # Time step for collision simulation
       min_points: 6                            # Minimum points for polygon validity
       visualize: True                          # Enable visualization in RViz
