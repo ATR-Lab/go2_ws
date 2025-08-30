@@ -440,12 +440,12 @@ behavior_server:
     # Marcus changed from 0.1 to 2.0
     use_sim_time: False                        # Real-time operation
     simulate_ahead_time: 2.0                   # Simulation lookahead time
-           # Marcus: changed from 1.0 to 0.5
-      max_rotational_vel: 0.1                    # Maximum rotational velocity - extremely conservative, Go2 can do 1.5+ rad/s
-     # Marcus: changed from 0.4 to 0.2
-      min_rotational_vel: 0.1                    # Minimum rotational velocity - matches max (fixed speed)
-      # Marcus: changed from 3.2 to 1.0
-      rotational_acc_lim: 0.1                    # Rotational acceleration limit - very conservative, Go2 can handle 2.0+ rad/s²
+    # Marcus: changed from 1.0 to 0.5
+    max_rotational_vel: 0.1                    # Maximum rotational velocity - extremely conservative, Go2 can do 1.5+ rad/s
+    # Marcus: changed from 0.4 to 0.2
+    min_rotational_vel: 0.1                    # Minimum rotational velocity - matches max (fixed speed)
+    # Marcus: changed from 3.2 to 1.0
+    rotational_acc_lim: 0.1                    # Rotational acceleration limit - very conservative, Go2 can handle 2.0+ rad/s²
 
 robot_state_publisher:
   ros__parameters:
