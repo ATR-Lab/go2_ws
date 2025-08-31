@@ -231,6 +231,17 @@ class Go2NodeFactory:
                     'audio_quality': 'standard'
                 }],
             ),
+            # Scan restamper node - converts base_link to base_footprint frame
+            Node(
+                package='scan_restamper',
+                executable='scan_restamper_node',
+                name='scan_restamper_node',
+                parameters=[{
+                    'input_topic': '/scan',
+                    'output_topic': '/scan_restamped',
+                    'frame_id': 'base_footprint'
+                }],
+            ),
         ]
     
     def create_teleop_nodes(self) -> List[Node]:
