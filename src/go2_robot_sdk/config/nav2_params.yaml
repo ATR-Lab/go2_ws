@@ -1,525 +1,2492 @@
+# ============================================================================
+# ADAPTIVE MONTE CARLO LOCALIZATION (AMCL) PARAMETERS
+# ============================================================================
+# AMCL uses particle filtering to estimate robot pose within a known map
+# Critical for autonomous navigation - provides map->odom transform
+
 amcl:
   ros__parameters:
+    # use_sim_time: Whether to use simulation time or wall clock time
+    # Expected: true (simulation), false (real robot)
+    # Impact: false = real-time operation (required for physical robots)
+    # true = synchronized simulation time (Gazebo/simulation only)
     use_sim_time: False                             # Use wall clock time for real robot operation
+    
+    # ============================================================================
+    # MOTION MODEL NOISE PARAMETERS (Alpha values)
+    # ============================================================================
+    # These parameters model odometry uncertainty - critical for localization accuracy
+    
+    # alpha1: Rotational noise due to rotation (rot-rot component)
+    # Expected: 0.1-0.8 (lower = more confident in rotation accuracy)
+    # Impact: Higher values = more uncertainty during turns (wider particle spread)
+    # Go2: 0.4 accounts for mecanum wheel slip during rotation
     alpha1: 0.4                                     # Odometry rotation noise from rotation - Go2's rotation accuracy
+    
+    # alpha2: Rotational noise due to translation (trans-rot component) 
+    # Expected: 0.1-0.8 (models heading drift during straight motion)
+    # Impact: Higher values = expect more heading error during forward motion
+    # Go2: 0.4 accounts for slight heading drift when moving forward
     alpha2: 0.4                                     # Odometry rotation noise from translation - wheel slip estimation
+    
+    # alpha3: Translational noise due to translation (trans-trans component)
+    # Expected: 0.1-0.8 (lower = more confident in distance accuracy)
+    # Impact: Higher values = more uncertainty in distance traveled
+    # Go2: 0.4 reflects moderate confidence in linear odometry accuracy
     alpha3: 0.4                                     # Odometry translation noise from translation - Go2's linear accuracy
+    
+    # alpha4: Translational noise due to rotation (rot-trans component)
+    # Expected: 0.1-0.8 (models position error during turns)
+    # Impact: Higher values = expect more position error when rotating
+    # Go2: 0.4 accounts for center-of-rotation uncertainty during turns
     alpha4: 0.4                                     # Odometry translation noise from rotation - turning accuracy
+    
+    # alpha5: Additional translational noise (omnidirectional motion)
+    # Expected: 0.0-0.5 (extra noise for complex motion patterns)
+    # Impact: Higher values = additional uncertainty for omnidirectional robots
+    # Go2: 0.4 adds noise for complex omnidirectional maneuvers
     alpha5: 0.4                                     # Translation noise - additional noise for omnidirectional motion
+    
+    # ============================================================================
+    # COORDINATE FRAME PARAMETERS
+    # ============================================================================
+    # Frame definitions must match robot's TF tree and other Nav2 components
+    
+    # base_frame_id: Robot's base coordinate frame
+    # Expected: "base_link", "base_footprint" (standard ROS conventions)
+    # Impact: Must match robot URDF, wrong frame breaks localization
+    # base_footprint = ground projection, base_link = robot center
     base_frame_id: "base_footprint"                 # Robot's ground projection frame - standard for mobile robots
-    beam_skip_distance: 0.5                         # Skip beams closer than this to reduce computational load
-    beam_skip_error_threshold: 0.9                  # Error threshold for skipping beams - quality control
-    beam_skip_threshold: 0.3                        # Probability threshold for beam skipping - performance optimization
-    do_beamskip: false                              # Disable beam skipping for better accuracy with Go2's lidar
+    
+    # global_frame_id: Global reference frame (where map is published)
+    # Expected: "map", "world" (standard conventions)
+    # Impact: Must match mapping system, wrong frame breaks navigation
+    # "map" frame comes from SLAM or pre-built map
     global_frame_id: "map"                          # Global reference frame for localization - SLAM-based navigation
-    lambda_short: 0.1                               # Likelihood of short readings - handle reflective surfaces
-    laser_likelihood_max_dist: 4.0                  # Max distance for likelihood calculation - computational efficiency
-    laser_max_range: 30.0                           # Maximum laser range to consider - full lidar capability
-    laser_min_range: -1.0                           # Minimum laser range (-1 means use sensor's minimum)
-    laser_model_type: "likelihood_field"            # Laser sensor model - efficient for indoor navigation
-    max_beams: 120                                  # Maximum laser beams to use - balance accuracy vs computation
-    max_particles: 1500                             # Maximum particles in filter - localization precision vs CPU
-    min_particles: 500                              # Minimum particles in filter - maintain localization robustness
+    
+    # odom_frame_id: Odometry reference frame
+    # Expected: "odom" (standard convention)
+    # Impact: Must match robot's odometry publisher, wrong frame breaks localization
+    # AMCL provides map->odom transform, robot provides odom->base_link
     odom_frame_id: "odom"                           # Odometry frame - Go2's wheel/IMU odometry reference
-    pf_err: 0.05                                    # Particle filter error tolerance - localization confidence
-    pf_z: 0.99                                      # Particle filter confidence - higher = more conservative
-    recovery_alpha_fast: 0.0                        # Fast recovery parameter - disabled for stability
-    recovery_alpha_slow: 0.0                        # Slow recovery parameter - disabled for stability  
-    resample_interval: 2                            # Resample particles every N updates - computational efficiency
-    robot_model_type: "nav2_amcl::OmniMotionModel"  # Motion model - suitable for Go2's omnidirectional capability
-    save_pose_rate: 0.5                             # Rate to save pose estimates - logging frequency
-    sigma_hit: 0.2                                  # Standard deviation of hit measurements - sensor noise
-    tf_broadcast: true                              # Broadcast transform - required for navigation stack
-    transform_tolerance: 0.6                        # Transform timing tolerance - accounts for WebRTC latency (~100-200ms)
-    update_min_a: 0.05                              # Minimum angular movement to trigger update - efficiency
-    update_min_d: 0.1                               # Minimum linear movement to trigger update - Go2 step size
-    z_hit: 0.5                                      # Weight of accurate measurements - sensor reliability
-    z_max: 0.05                                     # Weight of max range readings - handle open spaces
-    z_rand: 0.1                                     # Weight of random measurements - unexpected obstacles
-    z_short: 0.05                                   # Weight of short readings - reflections/noise
+    
+    # ============================================================================
+    # LASER PROCESSING PARAMETERS
+    # ============================================================================
+    # Control how laser scan data is processed for localization
+    
+    # beam_skip_distance: Skip beams closer than this distance (meters)
+    # Expected: 0.0-1.0 (0.0 = use all beams)
+    # Impact: Higher values = skip close obstacles (faster but less accurate)
+    # 0.5m skips very close readings that may be noisy
+    beam_skip_distance: 0.5                         # Skip beams closer than this to reduce computational load
+    
+    # beam_skip_error_threshold: Error threshold for skipping unreliable beams
+    # Expected: 0.5-0.95 (higher = more strict about beam quality)
+    # Impact: Higher values = skip more potentially bad beams (more conservative)
+    # 0.9 only skips clearly erroneous readings
+    beam_skip_error_threshold: 0.9                  # Error threshold for skipping beams - quality control
+    
+    # beam_skip_threshold: Probability threshold for beam skipping
+    # Expected: 0.1-0.5 (balance between speed and accuracy)
+    # Impact: Higher values = skip more beams (faster but less accurate)
+    # 0.3 provides moderate beam skipping for performance
+    beam_skip_threshold: 0.3                        # Probability threshold for beam skipping - performance optimization
+    
+    # do_beamskip: Enable/disable beam skipping optimization
+    # Expected: true/false
+    # Impact: true = faster processing (may reduce accuracy), false = use all beams
+    # false recommended for high-quality lidars like Go2's sensor
+    do_beamskip: false                              # Disable beam skipping for better accuracy with Go2's lidar
+    
+    # lambda_short: Likelihood parameter for short/reflected laser readings
+    # Expected: 0.05-0.3 (models probability of getting short readings)
+    # Impact: Higher values = expect more short/reflected readings from surfaces
+    # 0.1 provides reasonable modeling of reflective surfaces and multipath effects
+    lambda_short: 0.1                               # Likelihood of short readings - handle reflective surfaces
+    
+    # laser_likelihood_max_dist: Maximum distance for likelihood field calculation (meters)
+    # Expected: 2.0-10.0 (balance accuracy with computation)
+    # Impact: Higher values = consider distant obstacles (slower but more accurate)
+    # 4.0m provides good balance for indoor environments
+    laser_likelihood_max_dist: 4.0                  # Max distance for likelihood calculation - computational efficiency
+    
+    # laser_max_range: Maximum laser range to use for localization (meters)
+    # Expected: Should match or be less than lidar's actual max range
+    # Impact: Higher values = use more distant readings (may include noise)
+    # 30.0m uses full capability of high-end lidars
+    laser_max_range: 30.0                           # Maximum laser range to consider - full lidar capability
+    
+    # laser_min_range: Minimum laser range to use (-1 = use sensor minimum)
+    # Expected: -1.0 (auto-detect) or positive value in meters
+    # Impact: Positive values filter out very close readings
+    # -1.0 uses sensor's specification for minimum range
+    laser_min_range: -1.0                           # Minimum laser range (-1 means use sensor's minimum)
+    
+    # laser_model_type: Sensor model algorithm for laser processing
+    # Expected: "likelihood_field", "beam", "likelihood_field_prob"
+    # Impact: "likelihood_field" = fastest and most robust for indoor navigation
+    # "beam" = more accurate but slower, "likelihood_field_prob" = probabilistic version
+    laser_model_type: "likelihood_field"            # Laser sensor model - efficient for indoor navigation
+    
+    # max_beams: Maximum number of laser beams to process
+    # Expected: 50-360 (balance accuracy with computation time)
+    # Impact: More beams = better localization accuracy but slower processing
+    # 120 beams provides good coverage without excessive computation
+    max_beams: 120                                  # Maximum laser beams to use - balance accuracy vs computation
+    
+    # scan_topic: ROS topic name for laser scan input
+    # Expected: Valid ROS topic name (e.g., "scan", "scan_restamped")
+    # Impact: Must match lidar publisher topic name
+    # "scan_restamped" indicates timestamp correction for better synchronization
     scan_topic: scan_restamped                      # Laser scan topic name - input sensor data
+    
+    # ============================================================================
+    # PARTICLE FILTER PARAMETERS
+    # ============================================================================
+    # Control the Monte Carlo particle filter behavior
+    
+    # max_particles: Maximum number of particles in the filter
+    # Expected: 500-5000 (higher = better accuracy but more CPU intensive)
+    # Impact: More particles = better localization precision but slower processing
+    # 1500 provides good balance for real-time operation
+    max_particles: 1500                             # Maximum particles in filter - localization precision vs CPU
+    
+    # min_particles: Minimum number of particles to maintain
+    # Expected: 100-1000 (should be significantly less than max_particles)
+    # Impact: Too few = poor localization, too many = waste computation
+    # 500 maintains good localization robustness
+    min_particles: 500                              # Minimum particles in filter - maintain localization robustness
+    
+    # pf_err: Maximum error tolerance for particle filter
+    # Expected: 0.01-0.1 (lower = more accurate but slower adaptation)
+    # Impact: Lower values = require more precise localization before reducing particles
+    # 0.05 provides good balance between accuracy and responsiveness
+    pf_err: 0.05                                    # Particle filter error tolerance - localization confidence
+    
+    # pf_z: Confidence level for particle filter (quantile)
+    # Expected: 0.90-0.99 (higher = more conservative)
+    # Impact: Higher values = maintain more particles for safety
+    # 0.99 is very conservative, good for critical applications
+    pf_z: 0.99                                      # Particle filter confidence - higher = more conservative
+    
+    # recovery_alpha_fast: Fast exponential decay rate for recovery
+    # Expected: 0.0-0.5 (0.0 = disabled)
+    # Impact: Higher values = faster recovery from localization failures
+    # 0.0 disables recovery for more predictable behavior
+    recovery_alpha_fast: 0.0                        # Fast recovery parameter - disabled for stability
+    
+    # recovery_alpha_slow: Slow exponential decay rate for recovery
+    # Expected: 0.0-0.1 (0.0 = disabled)
+    # Impact: Higher values = gradual recovery from poor localization
+    # 0.0 disables slow recovery for consistent behavior
+    recovery_alpha_slow: 0.0                        # Slow recovery parameter - disabled for stability
+    
+    # resample_interval: Resample particles every N updates
+    # Expected: 1-5 (1 = resample every update, higher = less frequent)
+    # Impact: Higher values = faster processing but potentially less accurate
+    # 2 provides good balance between performance and accuracy
+    resample_interval: 2                            # Resample particles every N updates - computational efficiency
+    
+    # ============================================================================
+    # MOTION MODEL AND SENSOR MODEL PARAMETERS
+    # ============================================================================
+    
+    # robot_model_type: Motion model for robot kinematics
+    # Expected: "nav2_amcl::DifferentialMotionModel", "nav2_amcl::OmniMotionModel"
+    # Impact: Must match robot's actual kinematics for accurate prediction
+    # OmniMotionModel supports omnidirectional robots like Go2
+    robot_model_type: "nav2_amcl::OmniMotionModel"  # Motion model - suitable for Go2's omnidirectional capability
+    
+    # save_pose_rate: Rate to save/publish pose estimates (Hz)
+    # Expected: 0.1-2.0 (balance between logging and performance)
+    # Impact: Higher values = more frequent pose updates but more I/O
+    # 0.5 Hz provides reasonable pose logging frequency
+    save_pose_rate: 0.5                             # Rate to save pose estimates - logging frequency
+    
+    # sigma_hit: Standard deviation of measurement noise for "hit" model
+    # Expected: 0.05-0.5 (lower = assume more accurate sensor)
+    # Impact: Lower values = trust laser measurements more
+    # 0.2 reflects moderate confidence in laser accuracy
+    sigma_hit: 0.2                                  # Standard deviation of hit measurements - sensor noise
+    
+    # tf_broadcast: Whether to broadcast map->odom transform
+    # Expected: true (required for navigation stack)
+    # Impact: false = no transform publishing (breaks navigation)
+    # true is essential for Nav2 to function properly
+    tf_broadcast: true                              # Broadcast transform - required for navigation stack
+    
+    # transform_tolerance: Tolerance for transform timestamp synchronization (seconds)
+    # Expected: 0.1-1.0 (higher for systems with timing issues)
+    # Impact: Higher values = more tolerance for delayed data
+    # 0.6 accounts for WebRTC communication latency
+    transform_tolerance: 0.6                        # Transform timing tolerance - accounts for WebRTC latency (~100-200ms)
+    
+    # ============================================================================
+    # UPDATE THRESHOLDS
+    # ============================================================================
+    # Control when AMCL processes new sensor data
+    
+    # update_min_a: Minimum angular movement to trigger update (radians)
+    # Expected: 0.01-0.2 (balance responsiveness with computation)
+    # Impact: Lower values = more frequent updates (more responsive but more CPU)
+    # 0.05 (~3 degrees) provides good balance for typical robot movement
+    update_min_a: 0.05                              # Minimum angular movement to trigger update - efficiency
+    
+    # update_min_d: Minimum linear distance to trigger update (meters)
+    # Expected: 0.05-0.3 (should match robot's typical movement precision)
+    # Impact: Lower values = more frequent updates (better tracking but more CPU)
+    # 0.1m matches typical step size for Go2 robot
+    update_min_d: 0.1                               # Minimum linear movement to trigger update - Go2 step size
+    
+    # ============================================================================
+    # LASER MIXTURE MODEL WEIGHTS
+    # ============================================================================
+    # These weights should sum to 1.0 and model different types of laser readings
+    
+    # z_hit: Weight for accurate laser measurements
+    # Expected: 0.3-0.8 (higher = trust accurate readings more)
+    # Impact: Higher values = give more weight to precise measurements
+    # 0.5 provides balanced weighting for accurate readings
+    z_hit: 0.5                                      # Weight of accurate measurements - sensor reliability
+    
+    # z_max: Weight for maximum range readings (open space)
+    # Expected: 0.01-0.1 (small weight for max range readings)
+    # Impact: Higher values = give more weight to "no obstacle detected" readings
+    # 0.05 provides small but meaningful weight for open spaces
+    z_max: 0.05                                     # Weight of max range readings - handle open spaces
+    
+    # z_rand: Weight for random/unexpected measurements
+    # Expected: 0.05-0.2 (accounts for unexpected obstacles or noise)
+    # Impact: Higher values = more tolerance for unexpected readings
+    # 0.1 provides moderate tolerance for unexpected obstacles
+    z_rand: 0.1                                     # Weight of random measurements - unexpected obstacles
+    
+    # z_short: Weight for short/reflected readings
+    # Expected: 0.01-0.1 (small weight for potentially erroneous short readings)
+    # Impact: Higher values = more tolerance for reflections and interference
+    # 0.05 provides small weight for handling reflective surfaces
+    z_short: 0.05                                   # Weight of short readings - reflections/noise
+
+# ============================================================================
+# BEHAVIOR TREE NAVIGATOR PARAMETERS
+# ============================================================================
+# BT Navigator orchestrates high-level navigation logic using behavior trees
+# Controls mission planning, replanning, recovery behaviors, and goal management
 
 bt_navigator:
   ros__parameters:
+    # ============================================================================
+    # BEHAVIOR TREE CONFIGURATION FILES
+    # ============================================================================
+    # XML files defining the behavior tree logic for different navigation modes
+    
+    # default_nav_to_pose_bt_xml: Behavior tree for single goal navigation
+    # Expected: Valid file path to XML behavior tree definition
+    # Impact: Defines logic flow for single goal missions (plan->execute->recover)
+    # Custom BT allows time-based replanning and specialized recovery behaviors
     default_nav_to_pose_bt_xml: "/opt/ros/humble/share/nav2_bt_navigator/behavior_trees/navigate_w_replanning_time.xml"  # Custom BT for time-based replanning
-
-    # Through-poses: point to an existing Humble file so BT Navigator can start
+    
+    # default_nav_through_poses_bt_xml: Behavior tree for multi-waypoint navigation
+    # Expected: Valid file path to XML behavior tree definition  
+    # Impact: Defines logic for sequential waypoint missions with replanning/recovery
+    # More complex than single pose - handles waypoint progression and failure handling
     default_nav_through_poses_bt_xml: "/opt/ros/humble/share/nav2_bt_navigator/behavior_trees/navigate_through_poses_w_replanning_and_recovery.xml"  # Multi-waypoint navigation BT
+    
+    # ============================================================================
+    # FRAMEWORK CONFIGURATION
+    # ============================================================================
+    # Basic ROS2 and coordinate frame setup
+    
+    # use_sim_time: Whether to use simulation time or wall clock time
+    # Expected: true (simulation), false (real robot)
+    # Impact: false = real-time operation (required for physical robots)
+    # Must be consistent across all Nav2 nodes
     use_sim_time: False                          # Real-time operation for physical robot
+    
+    # global_frame: Global coordinate frame for navigation planning
+    # Expected: "map", "world" (standard ROS conventions)
+    # Impact: Must match AMCL and mapping system frames
+    # "map" frame is standard for SLAM-based navigation
     global_frame: map                            # Global coordinate frame - map-based navigation
+    
+    # robot_base_frame: Robot's base coordinate frame
+    # Expected: "base_link", "base_footprint" (standard ROS conventions)  
+    # Impact: Must match robot URDF and other Nav2 components
+    # base_footprint is standard for ground-based mobile robots
     robot_base_frame: base_footprint             # Robot's base frame for planning
+    
+    # odom_topic: ROS topic for odometry data
+    # Expected: Valid ROS topic name (typically "odom")
+    # Impact: Used for dead reckoning and motion estimation
+    # Must match robot's odometry publisher topic
     odom_topic: odom                             # Odometry topic for dead reckoning
+    
+    # ============================================================================
+    # TIMING AND EXECUTION PARAMETERS
+    # ============================================================================
+    # Control behavior tree execution frequency and timeouts
+    
+    # bt_loop_duration: Behavior tree execution period in milliseconds
+    # Expected: 10-100ms (10 = 100Hz, 100 = 10Hz)
+    # Impact: Lower values = more responsive but higher CPU load
+    # 10ms (100Hz) may be too aggressive for WebRTC latency, consider 20-50ms
     bt_loop_duration: 10                         # Behavior tree execution frequency (10ms) - may be too aggressive for WebRTC
+    
+    # default_server_timeout: Default timeout for action servers (seconds)
+    # Expected: 10-60 seconds (depends on mission complexity)
+    # Impact: Higher values = allow more time for complex maneuvers
+    # 20s accommodates complex navigation tasks and recovery behaviors
     default_server_timeout: 20                   # Default action server timeout - allow complex maneuvers
+    
+    # tf_buffer_duration: Transform buffer duration (seconds)
+    # Expected: 30-60 seconds (balance memory with transform history)
+    # Impact: Longer duration = better handling of delayed transforms
+    # 50s handles WebRTC timing issues and transform synchronization
     tf_buffer_duration: 50.0                     # Transform buffer size - handle timing issues
+    
+    # transform_tolerance: Transform timestamp tolerance (seconds)
+    # Expected: 0.1-1.0 (higher for systems with timing issues)
+    # Impact: Higher values = more tolerance for delayed transform data
+    # 0.6s accounts for WebRTC communication latency (100-200ms typical)
     transform_tolerance: 0.6                     # Transform timing tolerance - must account for WebRTC latency
-    # 'default_nav_through_poses_bt_xml' and 'default_nav_to_pose_bt_xml' are use defaults:
-    # nav2_bt_navigator/navigate_to_pose_w_replanning_and_recovery.xml
-    # nav2_bt_navigator/navigate_through_poses_w_replanning_and_recovery.xml
-    # They can be set here or via a RewrittenYaml remap from a parent launch file to Nav2.
+    
+    # ============================================================================
+    # BEHAVIOR TREE NODE PLUGIN LIBRARY
+    # ============================================================================
+    # Available plugins that can be used in behavior tree XML definitions
+    # These are the building blocks for creating custom navigation behaviors
+    
     plugin_lib_names:                            # Available behavior tree node plugins
-    - nav2_compute_path_to_pose_action_bt_node   # Path planning action node
-    - nav2_compute_path_through_poses_action_bt_node  # Multi-waypoint path planning
-    - nav2_smooth_path_action_bt_node            # Path smoothing for better trajectories
-    - nav2_follow_path_action_bt_node            # Path following execution
-    - nav2_spin_action_bt_node                   # In-place rotation behavior
-    - nav2_wait_action_bt_node                   # Wait behavior for timing
-    - nav2_assisted_teleop_action_bt_node        # Human-assisted teleoperation
-    - nav2_back_up_action_bt_node                # Reverse movement recovery
-    - nav2_drive_on_heading_bt_node              # Drive straight on heading
-    - nav2_clear_costmap_service_bt_node         # Clear costmap for recovery
-    - nav2_is_stuck_condition_bt_node            # Detect if robot is stuck
-    - nav2_goal_reached_condition_bt_node        # Check if goal is reached
-    - nav2_goal_updated_condition_bt_node        # Detect goal changes
+    # Planning and Path Management Actions
+    - nav2_compute_path_to_pose_action_bt_node   # Computes path from current pose to goal pose
+    - nav2_compute_path_through_poses_action_bt_node  # Computes path through multiple waypoints
+    - nav2_smooth_path_action_bt_node            # Smooths planned path for better trajectories
+    - nav2_follow_path_action_bt_node            # Executes path following using controller
+    - nav2_truncate_path_action_bt_node          # Truncates path for replanning scenarios
+    - nav2_truncate_path_local_action_bt_node    # Local path truncation for dynamic replanning
+    
+    # Basic Movement Actions  
+    - nav2_spin_action_bt_node                   # In-place rotation to specified heading
+    - nav2_wait_action_bt_node                   # Pause/wait behavior for timed operations
+    - nav2_back_up_action_bt_node                # Reverse movement for recovery scenarios
+    - nav2_drive_on_heading_bt_node              # Drive straight on specified heading
+    - nav2_assisted_teleop_action_bt_node        # Human-assisted teleoperation mode
+    
+    # System Management Actions
+    - nav2_clear_costmap_service_bt_node         # Clear costmap obstacles for recovery
+    - nav2_reinitialize_global_localization_service_bt_node  # Reset localization when lost
+    
+    # Navigation Status Conditions
+    - nav2_is_stuck_condition_bt_node            # Detect if robot movement is blocked
+    - nav2_goal_reached_condition_bt_node        # Check if navigation goal is achieved  
+    - nav2_goal_updated_condition_bt_node        # Detect when goal has been changed
     - nav2_globally_updated_goal_condition_bt_node  # Global goal update detection
-    - nav2_is_path_valid_condition_bt_node       # Validate current path
-    - nav2_initial_pose_received_condition_bt_node  # Check for initial pose
-    - nav2_reinitialize_global_localization_service_bt_node  # Localization recovery
-    - nav2_rate_controller_bt_node               # Rate-based control logic
-    - nav2_distance_controller_bt_node           # Distance-based control logic
-    - nav2_speed_controller_bt_node              # Speed regulation control
-    - nav2_truncate_path_action_bt_node          # Path truncation for replanning
-    - nav2_truncate_path_local_action_bt_node    # Local path truncation
-    - nav2_goal_updater_node_bt_node             # Dynamic goal updates
-    - nav2_recovery_node_bt_node                 # Recovery behavior coordination
-    - nav2_pipeline_sequence_bt_node             # Sequential behavior execution
-    - nav2_round_robin_node_bt_node              # Round-robin behavior selection
-    - nav2_transform_available_condition_bt_node # Transform availability check
-    - nav2_time_expired_condition_bt_node        # Time-based conditions
-    - nav2_path_expiring_timer_condition         # Path expiration timing
-    - nav2_distance_traveled_condition_bt_node   # Distance-based conditions
-    - nav2_single_trigger_bt_node                # Single execution trigger
-    - nav2_goal_updated_controller_bt_node       # Goal update handling
-    - nav2_is_battery_low_condition_bt_node      # Battery level monitoring
-    - nav2_navigate_through_poses_action_bt_node # Multi-waypoint navigation action
-    - nav2_navigate_to_pose_action_bt_node       # Single goal navigation action
-    - nav2_remove_passed_goals_action_bt_node    # Remove completed waypoints
-    - nav2_planner_selector_bt_node              # Dynamic planner selection
-    - nav2_controller_selector_bt_node           # Dynamic controller selection
-    - nav2_goal_checker_selector_bt_node         # Dynamic goal checker selection
-    - nav2_controller_cancel_bt_node             # Controller cancellation
-    - nav2_path_longer_on_approach_bt_node       # Path length monitoring
-    - nav2_wait_cancel_bt_node                   # Cancel wait behavior
-    - nav2_spin_cancel_bt_node                   # Cancel spin behavior
-    - nav2_back_up_cancel_bt_node                # Cancel backup behavior
-    - nav2_assisted_teleop_cancel_bt_node        # Cancel assisted teleop
-    - nav2_drive_on_heading_cancel_bt_node       # Cancel drive on heading
+    - nav2_is_path_valid_condition_bt_node       # Validate if current path is still feasible
+    - nav2_initial_pose_received_condition_bt_node  # Check if robot has initial pose estimate
+    - nav2_transform_available_condition_bt_node # Verify transform data availability
+    - nav2_is_battery_low_condition_bt_node      # Monitor robot battery levels for safety
+    
+    # Control Flow and Logic Nodes
+    - nav2_rate_controller_bt_node               # Rate-based execution control
+    - nav2_distance_controller_bt_node           # Distance-based execution control  
+    - nav2_speed_controller_bt_node              # Speed regulation and control
+    - nav2_pipeline_sequence_bt_node             # Sequential behavior execution pipeline
+    - nav2_round_robin_node_bt_node              # Round-robin selection between behaviors
+    - nav2_single_trigger_bt_node                # Single-execution trigger mechanism
+    
+    # Timing and State Management
+    - nav2_time_expired_condition_bt_node        # Time-based condition checking
+    - nav2_path_expiring_timer_condition         # Path validity timer conditions
+    - nav2_distance_traveled_condition_bt_node   # Distance-based condition evaluation
+    - nav2_path_longer_on_approach_bt_node       # Path length monitoring during approach
+    
+    # Goal and Mission Management  
+    - nav2_goal_updater_node_bt_node             # Dynamic goal update handling
+    - nav2_navigate_through_poses_action_bt_node # High-level multi-waypoint navigation
+    - nav2_navigate_to_pose_action_bt_node       # High-level single goal navigation
+    - nav2_remove_passed_goals_action_bt_node    # Remove completed waypoints from queue
+    
+    # Dynamic Component Selection
+    - nav2_planner_selector_bt_node              # Dynamic path planner selection
+    - nav2_controller_selector_bt_node           # Dynamic controller algorithm selection  
+    - nav2_goal_checker_selector_bt_node         # Dynamic goal achievement checker selection
+    
+    # Recovery and Error Handling
+    - nav2_recovery_node_bt_node                 # Recovery behavior coordination and management
+    - nav2_controller_cancel_bt_node             # Cancel active controller operations
+    - nav2_wait_cancel_bt_node                   # Cancel wait/pause behaviors
+    - nav2_spin_cancel_bt_node                   # Cancel rotation behaviors
+    - nav2_back_up_cancel_bt_node                # Cancel backup movement behaviors
+    - nav2_assisted_teleop_cancel_bt_node        # Cancel assisted teleoperation mode
+    - nav2_drive_on_heading_cancel_bt_node       # Cancel straight driving behaviors
+
+# ============================================================================
+# BT NAVIGATOR SUB-NODES
+# ============================================================================
+# Specialized behavior tree nodes for different navigation scenarios
 
 bt_navigator_navigate_through_poses_rclcpp_node:
   ros__parameters:
+    # use_sim_time: Time synchronization for multi-waypoint navigation node
+    # Expected: true (simulation), false (real robot)
+    # Impact: Must match main bt_navigator setting for consistent timing
+    # false = real-time operation required for physical robot deployment
     use_sim_time: False                          # Real-time operation for multi-waypoint navigation
 
 bt_navigator_navigate_to_pose_rclcpp_node:
   ros__parameters:
+    # use_sim_time: Time synchronization for single goal navigation node
+    # Expected: true (simulation), false (real robot)  
+    # Impact: Must match main bt_navigator setting for consistent timing
+    # false = real-time operation required for physical robot deployment
     use_sim_time: False                          # Real-time operation for single goal navigation
+
+# ============================================================================
+# CONTROLLER SERVER PARAMETERS
+# ============================================================================
+# Manages robot motion control, path following, and goal achievement
+# Critical for safe and precise robot movement
 
 controller_server:
   ros__parameters:
+    # ============================================================================
+    # SYSTEM TIMING AND SYNCHRONIZATION
+    # ============================================================================
+    # Essential parameters for coordinated operation with other Nav2 components
+    
+    # tf_buffer_duration: Transform buffer duration (seconds)
+    # Expected: 30-60 seconds (balance memory usage with history needs)
+    # Impact: Longer duration = better handling of delayed transform data
+    # 50.0s essential for WebRTC systems with variable latency
     tf_buffer_duration: 50.0                     # Large TF buffer essential for WebRTC timing robustness
+    
+    # transform_tolerance: Transform timestamp synchronization tolerance (seconds)
+    # Expected: 0.1-1.0 (higher for systems with timing variability)
+    # Impact: Higher values = more tolerance for delayed sensor data
+    # 0.6s accommodates WebRTC latency variations (100-300ms typical)
     transform_tolerance: 0.6                     # Transform synchronization tolerance
+    
+    # controller_frequency: Control loop execution frequency (Hz)
+    # Expected: 10-50Hz (balance responsiveness with computational load)
+    # Impact: Higher frequency = more responsive but more CPU intensive
+    # 20Hz provides good responsiveness, 10Hz may be needed for WebRTC stability
     controller_frequency: 20.0                   # Control loop frequency - may need reduction to 10-15Hz for WebRTC stability
-    # controller_frequency: 10.0                   # Control loop frequency - matches model_dt 0.1s to prevent timing issues, slightly less responsive control but more stable
+    # controller_frequency: 10.0                   # Alternative: matches model_dt 0.1s, less responsive but more stable
+    
+    # costmap_update_timeout: Maximum time to wait for costmap updates (seconds)
+    # Expected: 0.1-1.0 (should be much less than controller period)
+    # Impact: Higher values = more tolerance for delayed obstacle data
+    # 0.30s provides reasonable timeout, may need increase for WebRTC systems
     costmap_update_timeout: 0.30                 # Timeout for costmap updates - may need increase for WebRTC delays
+    
+    # ============================================================================
+    # MOTION DETECTION THRESHOLDS
+    # ============================================================================
+    # Define minimum velocities considered as actual robot movement
+    
+    # min_x_velocity_threshold: Minimum forward/backward velocity threshold (m/s)
+    # Expected: 0.001-0.01 (very small positive value)
+    # Impact: Lower values = detect smaller movements, higher = ignore micro-movements
+    # 0.001 catches very small movements for precise control
     min_x_velocity_threshold: 0.001              # Minimum X velocity considered as movement
-    min_y_velocity_threshold: 0.001              # Minimum Y velocity considered as movement  
+    
+    # min_y_velocity_threshold: Minimum lateral velocity threshold (m/s)
+    # Expected: 0.001-0.01 (very small positive value)
+    # Impact: Lower values = detect smaller lateral movements
+    # 0.001 important for omnidirectional robots like Go2
+    min_y_velocity_threshold: 0.001              # Minimum Y velocity considered as movement
+    
+    # min_theta_velocity_threshold: Minimum rotational velocity threshold (rad/s)
+    # Expected: 0.001-0.01 (very small positive value)
+    # Impact: Lower values = detect smaller rotational movements
+    # 0.001 allows detection of small heading corrections
     min_theta_velocity_threshold: 0.001          # Minimum rotational velocity threshold
+    
+    # ============================================================================
+    # FAILURE HANDLING
+    # ============================================================================
+    # Parameters controlling when controller declares failure
+    
+    # failure_tolerance: Distance tolerance before declaring path following failure (meters)
+    # Expected: 0.1-1.0 (balance between precision and robustness)
+    # Impact: Lower values = more strict path following, higher = more tolerant
+    # 0.3m provides reasonable tolerance for Go2's precision capabilities
     failure_tolerance: 0.3                       # Tolerance before declaring controller failure
+    
+    # ============================================================================
+    # PLUGIN CONFIGURATION
+    # ============================================================================
+    # Define which plugins handle different aspects of control
+    
+    # progress_checker_plugins: Plugins to monitor navigation progress
+    # Expected: List of valid progress checker plugin names
+    # Impact: These plugins determine when robot is making progress toward goal
+    # "progress_checker" uses simple movement-based progress detection
     progress_checker_plugins: ["progress_checker"]  # Plugins to check navigation progress
+    
+    # goal_checker_plugins: Plugins to determine when goal is achieved
+    # Expected: List of valid goal checker plugin names  
+    # Impact: These plugins determine when robot has successfully reached goal
+    # "general_goal_checker" uses position/orientation tolerance checking
     goal_checker_plugins: ["general_goal_checker"] # Plugins to check goal achievement
+    
+    # controller_plugins: Active path following controller algorithms
+    # Expected: List of valid controller plugin names
+    # Impact: These algorithms compute velocity commands for path following
+    # "FollowPath" uses MPPI (Model Predictive Path Integral) controller
     controller_plugins: ["FollowPath"]           # Active controller plugin
+    
+    # use_realtime_priority: Enable real-time scheduling priority
+    # Expected: true/false
+    # Impact: true = higher OS priority (may cause system issues), false = normal priority
+    # false recommended for most systems to avoid potential OS conflicts
     use_realtime_priority: false                 # Disable RT priority - may cause issues
 
-    # Progress checker parameters
+    # ============================================================================
+    # PROGRESS CHECKER CONFIGURATION
+    # ============================================================================
+    # Monitors whether robot is making progress toward goal
+    
     progress_checker:
+      # plugin: Progress checking algorithm to use
+      # Expected: "nav2_controller::SimpleProgressChecker" (standard implementation)
+      # Impact: Determines logic for detecting when robot is stuck or making progress
+      # SimpleProgressChecker uses movement radius and time-based criteria
       plugin: "nav2_controller::SimpleProgressChecker"  # Simple progress monitoring
+      
+      # required_movement_radius: Minimum distance robot must move to show progress (meters)
+      # Expected: 0.1-0.5 (should match robot's precision and typical movement)
+      # Impact: Lower values = more sensitive to small movements
+      # 0.15m appropriate for Go2's precision and step size
       required_movement_radius: 0.15            # Minimum movement to show progress - Go2 precision
+      
+      # movement_time_allowance: Maximum time without progress before declaring failure (seconds)
+      # Expected: 10-60 seconds (balance between patience and responsiveness)
+      # Impact: Longer time = more patient with temporary obstacles
+      # 20.0s allows time for complex maneuvers and temporary obstacle clearance
       movement_time_allowance: 20.0             # Time allowed without progress before failure
-    # Goal checker parameters
+      
+    # ============================================================================
+    # GOAL CHECKER CONFIGURATION  
+    # ============================================================================
+    # Determines when robot has successfully reached navigation goal
+    
+    # Alternative precise goal checker (commented out)
     #precise_goal_checker:
     #  plugin: "nav2_controller::SimpleGoalChecker"
     #  xy_goal_tolerance: 0.25
     #  yaw_goal_tolerance: 0.25
     #  stateful: True
+    
     general_goal_checker:
+      # stateful: Whether to maintain state between goal checking calls
+      # Expected: true/false
+      # Impact: true = remember previous state for consistent checking
+      # true provides more reliable goal achievement detection
       stateful: True                                # Maintain state between checks
+      
+      # plugin: Goal checking algorithm to use
+      # Expected: "nav2_controller::SimpleGoalChecker" (standard implementation)
+      # Impact: Determines logic for detecting goal achievement
+      # SimpleGoalChecker uses position and orientation tolerances
       plugin: "nav2_controller::SimpleGoalChecker"  # Simple goal achievement check
+      
+      # xy_goal_tolerance: Position tolerance for goal achievement (meters)
+      # Expected: 0.1-0.5 (balance precision with achievability)
+      # Impact: Lower values = more precise positioning required
+      # 0.35m may be loose for precision tasks, consider 0.15-0.25m for patrol waypoints
       xy_goal_tolerance: 0.35                       # Position tolerance - may be too loose for precise patrol waypoints (consider 0.15-0.25)
+      
+      # yaw_goal_tolerance: Orientation tolerance for goal achievement (radians)
+      # Expected: 0.1-0.5 (~6-29 degrees)
+      # Impact: Lower values = more precise orientation required
+      # 0.35 rad (~20 degrees) may be loose for directional tasks
       yaw_goal_tolerance: 0.35                      # Orientation tolerance - may be too loose for directional patrol tasks
+    # ============================================================================
+    # MPPI CONTROLLER CONFIGURATION (FollowPath)
+    # ============================================================================
+    # Model Predictive Path Integral Controller - advanced algorithm for path following
+    # Samples many possible trajectories and selects optimal based on cost functions
+    
     FollowPath:
+      # plugin: Controller algorithm implementation
+      # Expected: "nav2_mppi_controller::MPPIController" (advanced predictive controller)
+      # Impact: MPPI provides smooth, optimal trajectories with obstacle avoidance
+      # Alternative: DWB for simpler requirements, TEB for time-elastic paths
       plugin: "nav2_mppi_controller::MPPIController"  # Advanced model predictive controller
+      
+      # ============================================================================
+      # ROBOT MOTION MODEL
+      # ============================================================================
+      
+      # motion_model: Robot kinematics model for trajectory prediction
+      # Expected: "Omni" (omnidirectional), "Diff" (differential drive), "Ackermann"
+      # Impact: Must match robot's actual kinematics for accurate prediction
+      # "Omni" leverages Go2's omnidirectional movement capabilities
       motion_model: "Omni"                       # Omnidirectional motion - leverages Go2's capabilities
-      # time_steps: 56                             # Prediction horizon steps - long-term planning
+      
+      # ============================================================================
+      # PREDICTION HORIZON PARAMETERS
+      # ============================================================================
+      # Control how far ahead the controller plans trajectories
+      
+      # time_steps: Number of prediction steps in horizon
+      # Expected: 20-60 (balance planning quality with computation)
+      # Impact: More steps = longer lookahead but slower computation
+      # 28 steps provides 2.8s lookahead with 0.1s model_dt
+      # time_steps: 56                             # Long-term planning (5.6s @ 0.1s dt)
       time_steps: 28                             # Reduced prediction horizon to match new model_dt
-      # model_dt: 0.05                             # Time step size (50ms) - smooth prediction
+      
+      # model_dt: Time step size for prediction (seconds)
+      # Expected: 0.05-0.2 (should coordinate with controller_frequency)
+      # Impact: Smaller dt = finer prediction but more computation
+      # 0.1s (10Hz) matches reduced controller frequency for stability
+      # model_dt: 0.05                             # Fine time resolution (50ms)
       model_dt: 0.1                              # Time step size (100ms) - matches controller frequency
-      # batch_size: 5000                          # High quality sampling - external computer can handle 15000+ for better performance
-      batch_size: 3000                          # Reduced for better performance with WebRTC      # Marcus: Half the velocities (linear and angular) for path following
-      ax_max: 3.0                                # Maximum X acceleration - Go2's dynamic limits
-      ax_min: -3.0                               # Minimum X acceleration - deceleration capability
-      ay_max: 3.0                                # Maximum Y acceleration - lateral dynamics
-      az_max: 3.5                                # Maximum angular acceleration - rotation dynamics
-      vx_std: 0.15                               # X velocity noise std dev - motion uncertainty
-      vy_std: 0.08                               # Y velocity noise std dev - lateral uncertainty
-      wz_std: 0.4                                # Angular velocity noise std dev - rotation uncertainty
-      vx_max: 0.5                                # Maximum X velocity - Go2 can safely do 1.2+ m/s for faster patrol
-      vx_min: -0.35                              # Minimum X velocity - reverse capability
-      vy_max: 0.2                                # Maximum Y velocity - Go2's lateral capability underutilized, can do 0.5+ m/s
-      wz_max: 1.9                                # Maximum angular velocity - Go2's turning capability
-      # iteration_count: 2                         # MPPI iterations per control cycle - balance quality/speed
+      
+      # ============================================================================
+      # SAMPLING PARAMETERS
+      # ============================================================================
+      # Control trajectory sampling quality and computational load
+      
+      # batch_size: Number of trajectory samples per iteration
+      # Expected: 1000-10000 (higher = better optimization but slower)
+      # Impact: More samples = better trajectory selection but more CPU
+      # 3000 provides good balance, can increase to 5000+ for external computers
+      # batch_size: 5000                          # High quality sampling for external computer
+      batch_size: 3000                          # Reduced for better performance with WebRTC
+      
+      # iteration_count: MPPI optimization iterations per control cycle
+      # Expected: 1-3 (balance optimization quality with real-time constraints)
+      # Impact: More iterations = better optimization but slower response
+      # 1 iteration for real-time performance, 2+ for higher quality
+      # iteration_count: 2                         # Multiple iterations for quality
       iteration_count: 1                         # Single iteration for better performance
+      
+      # ============================================================================
+      # ROBOT DYNAMIC LIMITS
+      # ============================================================================
+      # Physical constraints for robot acceleration and velocity
+      
+      # ax_max: Maximum forward/backward acceleration (m/s²)
+      # Expected: 1.0-5.0 (should match robot's physical capabilities)
+      # Impact: Higher values = more aggressive acceleration
+      # 3.0 m/s² appropriate for Go2's dynamic capabilities
+      ax_max: 3.0                                # Maximum X acceleration - Go2's dynamic limits
+      
+      # ax_min: Minimum (maximum deceleration) forward/backward acceleration (m/s²)
+      # Expected: Negative value, magnitude 1.0-5.0
+      # Impact: More negative = more aggressive braking capability
+      # -3.0 m/s² provides good deceleration for safe stopping
+      ax_min: -3.0                               # Minimum X acceleration - deceleration capability
+      
+      # ay_max: Maximum lateral acceleration (m/s²)
+      # Expected: 1.0-5.0 (typically less than forward acceleration)
+      # Impact: Higher values = more aggressive lateral maneuvers
+      # 3.0 m/s² matches Go2's omnidirectional capabilities
+      ay_max: 3.0                                # Maximum Y acceleration - lateral dynamics
+      
+      # az_max: Maximum angular acceleration (rad/s²)
+      # Expected: 2.0-10.0 (depends on robot's rotational capability)
+      # Impact: Higher values = faster rotational maneuvers
+      # 3.5 rad/s² appropriate for Go2's rotation dynamics
+      az_max: 3.5                                # Maximum angular acceleration - rotation dynamics
+      
+      # ============================================================================
+      # VELOCITY LIMITS
+      # ============================================================================
+      # Maximum and minimum velocities for safe operation
+      
+      # vx_max: Maximum forward velocity (m/s)
+      # Expected: 0.3-2.0 (conservative values for safety)
+      # Impact: Higher values = faster navigation but less safety margin
+      # 0.5 m/s conservative for Go2 (can do 1.2+ m/s for faster operation)
+      vx_max: 0.5                                # Maximum X velocity - Go2 can safely do 1.2+ m/s for faster patrol
+      
+      # vx_min: Minimum (maximum reverse) velocity (m/s)
+      # Expected: Negative value, magnitude 0.2-1.0
+      # Impact: More negative = faster reverse capability
+      # -0.35 m/s provides reasonable reverse capability
+      vx_min: -0.35                              # Minimum X velocity - reverse capability
+      
+      # vy_max: Maximum lateral velocity (m/s)
+      # Expected: 0.2-1.0 (typically less than forward velocity)
+      # Impact: Higher values = faster strafing capability
+      # 0.2 m/s conservative (Go2 can do 0.5+ m/s lateral)
+      vy_max: 0.2                                # Maximum Y velocity - Go2's lateral capability underutilized, can do 0.5+ m/s
+      
+      # wz_max: Maximum angular velocity (rad/s)
+      # Expected: 1.0-4.0 (balance agility with stability)
+      # Impact: Higher values = faster turning but less stable
+      # 1.9 rad/s (~109 deg/s) provides good turning capability
+      wz_max: 1.9                                # Maximum angular velocity - Go2's turning capability
+      
+      # ============================================================================
+      # NOISE PARAMETERS FOR TRAJECTORY SAMPLING
+      # ============================================================================
+      # Standard deviations for velocity noise in trajectory generation
+      
+      # vx_std: Standard deviation for forward velocity noise
+      # Expected: 0.05-0.3 (should be reasonable fraction of vx_max)
+      # Impact: Higher values = more exploration of velocity space
+      # 0.15 provides good exploration around nominal forward velocity
+      vx_std: 0.15                               # X velocity noise std dev - motion uncertainty
+      
+      # vy_std: Standard deviation for lateral velocity noise
+      # Expected: 0.05-0.2 (should be reasonable fraction of vy_max)
+      # Impact: Higher values = more exploration of lateral velocities
+      # 0.08 provides moderate exploration of lateral motion
+      vy_std: 0.08                               # Y velocity noise std dev - lateral uncertainty
+      
+      # wz_std: Standard deviation for angular velocity noise
+      # Expected: 0.1-0.8 (should be reasonable fraction of wz_max)
+      # Impact: Higher values = more exploration of rotational velocities
+      # 0.4 provides good exploration of rotational space
+      wz_std: 0.4                                # Angular velocity noise std dev - rotation uncertainty
+      
+      # ============================================================================
+      # TRAJECTORY PROCESSING PARAMETERS
+      # ============================================================================
+      
+      # prune_distance: Distance threshold for pruning invalid trajectories (meters)
+      # Expected: 1.0-3.0 (should be related to planning horizon)
+      # Impact: Higher values = keep more trajectories (more computation)
+      # 1.7m provides reasonable pruning for indoor navigation
       prune_distance: 1.7                        # Distance to prune invalid trajectories
+      
+      # transform_tolerance: Transform timing tolerance (seconds)
+      # Expected: 0.1-1.0 (should match system timing characteristics)
+      # Impact: Higher values = more tolerance for delayed transforms
+      # 0.6s accommodates WebRTC latency variations
       transform_tolerance: 0.6                   # Transform timing tolerance
+      
+      # ============================================================================
+      # MPPI ALGORITHM PARAMETERS
+      # ============================================================================
+      
+      # temperature: MPPI temperature parameter (exploration vs exploitation)
+      # Expected: 0.1-1.0 (lower = more exploitative, higher = more exploratory)
+      # Impact: Lower values = stick to best trajectories, higher = explore more
+      # 0.3 provides balanced exploration/exploitation
       temperature: 0.3                           # MPPI temperature parameter - exploration vs exploitation
+      
+      # gamma: Discount factor for future trajectory costs
+      # Expected: 0.001-0.1 (how much to weight future vs immediate costs)
+      # Impact: Lower values = weight immediate costs more heavily
+      # 0.015 provides reasonable future cost discounting
       gamma: 0.015                               # Discount factor for future costs
+      
+      # ============================================================================
+      # VISUALIZATION AND DEBUGGING
+      # ============================================================================
+      
+      # visualize: Enable trajectory visualization in RViz
+      # Expected: true/false
+      # Impact: true = helpful debugging but uses more bandwidth/CPU
+      # true recommended for development, false for production
       visualize: true                            # Enable trajectory visualization in RViz
+      
+      # regenerate_noises: Generate new random samples each iteration
+      # Expected: true/false
+      # Impact: true = fresh exploration each cycle, false = reuse samples
+      # true provides better trajectory diversity
       regenerate_noises: true                    # Generate new noise samples each iteration
+      # ============================================================================
+      # TRAJECTORY VISUALIZATION CONFIGURATION
+      # ============================================================================
+      # Controls how trajectories are displayed in RViz for debugging
+      
       TrajectoryVisualizer:
+        # trajectory_step: Skip every N trajectory points in visualization
+        # Expected: 1-10 (higher = less visual clutter)
+        # Impact: Higher values = less detailed but cleaner visualization
+        # 5 provides good balance between detail and clarity
         trajectory_step: 5                       # Visualization step size - reduce visual clutter
+        
+        # time_step: Skip every N time steps in visualization
+        # Expected: 1-5 (higher = show fewer trajectory time points)
+        # Impact: Higher values = less dense time representation
+        # 3 shows every 3rd time step for cleaner visualization
         time_step: 3                             # Time step for visualization
+        
+      # ============================================================================
+      # KINEMATIC CONSTRAINTS
+      # ============================================================================
+      # Physical limitations for specific robot types (less relevant for omnidirectional)
+      
       AckermannConstraints:
+        # min_turning_r: Minimum turning radius for Ackermann steering (meters)
+        # Expected: 0.1-1.0 (depends on robot's physical constraints)
+        # Impact: Larger values = wider turning circles required
+        # 0.2m appropriate for Go2's kinematic limits (less relevant for omni motion)
         min_turning_r: 0.2                       # Minimum turning radius - Go2's kinematic limits
+        
+      # ============================================================================
+      # COST FUNCTION CRITICS
+      # ============================================================================
+      # Defines which cost components are used for trajectory evaluation
+      # Order matters - earlier critics may have higher priority
+      
       critics: [                                 # Cost function components for trajectory evaluation
-        "ConstraintCritic", "CostCritic", "GoalCritic",
-        "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic",
-        "PathAngleCritic", "PreferForwardCritic"]
+        "ConstraintCritic",      # Enforce kinematic/dynamic constraints
+        "CostCritic",           # Penalize obstacles and high-cost areas  
+        "GoalCritic",           # Attract to goal position
+        "GoalAngleCritic",      # Attract to goal orientation
+        "PathAlignCritic",      # Align with global path direction
+        "PathFollowCritic",     # Follow planned path closely
+        "PathAngleCritic",      # Match path orientation
+        "PreferForwardCritic"]  # Prefer forward over reverse motion
+      # ============================================================================
+      # INDIVIDUAL COST CRITIC CONFIGURATIONS
+      # ============================================================================
+      # Each critic contributes to trajectory evaluation with specific behaviors
+      
       ConstraintCritic:
+        # enabled: Whether this critic is active in cost calculation
+        # Expected: true/false
+        # Impact: false = disable kinematic constraint enforcement
+        # true essential for safe operation within robot's physical limits
         enabled: true                            # Enforce kinematic constraints
+        
+        # cost_power: Exponential scaling factor for cost (1 = linear, 2 = quadratic)
+        # Expected: 1-3 (1 = linear is most common)
+        # Impact: Higher values = more aggressive penalty near constraint limits
+        # 1 provides linear cost scaling for predictable behavior
         cost_power: 1                            # Linear cost scaling
+        
+        # cost_weight: Relative importance of this critic in total cost
+        # Expected: 1.0-10.0 (higher = more important)
+        # Impact: Higher weight = this critic dominates trajectory selection
+        # 4.0 ensures high priority for constraint satisfaction
         cost_weight: 4.0                         # High priority for constraint satisfaction
+        
       GoalCritic:
+        # Goal attraction - pulls robot toward final goal position
         enabled: true                            # Drive toward goal position
         cost_power: 1                            # Linear cost scaling
+        
+        # cost_weight: Priority for goal reaching behavior
+        # Expected: 3.0-10.0 (should be high priority)
+        # Impact: Higher weight = stronger attraction to goal
+        # 5.0 provides strong goal attraction without overpowering obstacle avoidance
         cost_weight: 5.0                         # High priority for goal reaching
+        
+        # threshold_to_consider: Distance at which goal attraction activates (meters)
+        # Expected: 1.0-3.0 (should be reasonable approach distance)
+        # Impact: Smaller values = goal attraction only very close to goal
+        # 1.4m activates goal attraction at reasonable approach distance
         threshold_to_consider: 1.4               # Distance threshold to activate goal attraction
+        
       GoalAngleCritic:
+        # Goal orientation alignment - drives robot to correct final orientation
         enabled: true                            # Drive toward goal orientation
         cost_power: 1                            # Linear cost scaling
+        
+        # cost_weight: Priority for orientation alignment
+        # Expected: 2.0-5.0 (moderate priority)
+        # Impact: Higher weight = more emphasis on precise orientation
+        # 3.0 provides balanced orientation correction without overpowering
         cost_weight: 3.0                         # Moderate priority for orientation
+        
+        # threshold_to_consider: Distance at which orientation matters (meters)
+        # Expected: 0.3-1.0 (closer than position threshold)
+        # Impact: Smaller values = orientation correction only very close to goal
+        # 0.5m activates orientation control at reasonable final approach distance
         threshold_to_consider: 0.5               # Distance threshold for orientation consideration
+        
       PreferForwardCritic:
+        # Forward motion preference - penalizes reverse motion
         enabled: true                            # Prefer forward motion over reverse
         cost_power: 1                            # Linear cost scaling
+        
+        # cost_weight: Strength of forward motion preference
+        # Expected: 5.0-15.0 (strong preference prevents unwanted reversing)
+        # Impact: Higher weight = stronger bias against reverse motion
+        # 8.0 provides strong forward preference while allowing necessary reversing
         cost_weight: 8.0                         # Strong preference for forward motion
+        
+        # threshold_to_consider: Distance from goal where forward preference applies
+        # Expected: 0.3-1.0 (disable near goal to allow final positioning)
+        # Impact: Smaller values = allow reverse motion closer to goal
+        # 0.5m allows reverse motion for final precise positioning
         threshold_to_consider: 0.5               # Distance threshold for forward preference
+        
       CostCritic:
+        # Obstacle avoidance - penalizes trajectories through obstacles
         enabled: true                            # Avoid obstacles and high-cost areas
         cost_power: 1                            # Linear cost scaling
+        
+        # cost_weight: Importance of obstacle avoidance
+        # Expected: 3.0-8.0 (very important for safety)
+        # Impact: Higher weight = stronger obstacle avoidance
+        # 3.81 provides strong obstacle avoidance balanced with other objectives
         cost_weight: 3.81                        # Strong obstacle avoidance
+        
+        # critical_cost: Costmap value considered critically dangerous
+        # Expected: 200-400 (depends on costmap scaling)
+        # Impact: Higher values = tolerate higher cost areas
+        # 300.0 provides conservative safety threshold
         critical_cost: 300.0                     # Cost threshold for critical obstacles
+        
+        # consider_footprint: Use robot's full footprint for collision checking
+        # Expected: true/false
+        # Impact: true = more accurate collision detection, false = point robot
+        # true essential for safe navigation with robot's physical dimensions
         consider_footprint: true                 # Use robot footprint for collision checking
+        
+        # collision_cost: Penalty for trajectories that would cause collision
+        # Expected: 100000-10000000 (extremely high)
+        # Impact: Higher values = absolutely avoid collisions
+        # 1000000.0 ensures collision avoidance has highest priority
         collision_cost: 1000000.0                # Extremely high cost for collisions
+        
+        # near_goal_distance: Distance considered "near goal" for cost relaxation
+        # Expected: 0.5-2.0 (allow closer approach to obstacles near goal)
+        # Impact: Larger values = relax obstacle avoidance over larger area
+        # 1.0m provides reasonable relaxation zone near goal
         near_goal_distance: 1.0                  # Distance considered "near goal"
+        
+        # trajectory_point_step: Skip every N points when evaluating trajectory cost
+        # Expected: 1-5 (balance accuracy with computation)
+        # Impact: Higher values = faster computation but less accurate collision detection
+        # 2 provides good balance of accuracy and performance
         trajectory_point_step: 2                 # Sampling step for trajectory evaluation
+        
       PathAlignCritic:
+        # Path direction alignment - encourages following global path direction
         enabled: true                            # Align with global path direction
         cost_power: 1                            # Linear cost scaling
+        
+        # cost_weight: Importance of path direction alignment
+        # Expected: 8.0-15.0 (high importance for path following)
+        # Impact: Higher weight = stronger preference for path direction
+        # 10.0 provides strong path alignment while allowing obstacle avoidance
         cost_weight: 10.0                        # Strong path alignment preference
+        
+        # max_path_occupancy_ratio: Maximum obstacle occupancy on path before disabling
+        # Expected: 0.01-0.1 (very low tolerance for blocked paths)
+        # Impact: Higher values = continue aligning even with obstacles on path
+        # 0.05 disables alignment when path is significantly blocked
         max_path_occupancy_ratio: 0.05           # Maximum path occupancy for alignment
+        
+        # trajectory_point_step: Sampling density for path alignment checking
+        # Expected: 2-8 (balance accuracy with computation)
+        # Impact: Higher values = less precise alignment but faster computation
+        # 4 provides reasonable alignment accuracy
         trajectory_point_step: 4                 # Sampling step for path alignment
+        
+        # threshold_to_consider: Distance from path where alignment matters
+        # Expected: 0.3-1.0 (balance strict following with obstacle avoidance)
+        # Impact: Smaller values = only align when very close to path
+        # 0.5m provides reasonable path following tolerance
         threshold_to_consider: 0.5               # Distance threshold for path alignment
+        
+        # offset_from_furthest: Look-ahead distance for path direction calculation
+        # Expected: 10-30 points (balance responsiveness with smoothness)
+        # Impact: Higher values = smoother but less responsive direction following
+        # 20 provides good balance between smoothness and responsiveness
         offset_from_furthest: 20                 # Offset from furthest point for alignment
+        
+        # use_path_orientations: Use path's specified orientations vs. computed directions
+        # Expected: true/false
+        # Impact: true = follow path orientations exactly, false = compute directions
+        # false allows more natural trajectory following
         use_path_orientations: false             # Don't enforce path orientations
+        
       PathFollowCritic:
+        # Path following - encourages staying close to planned path
         enabled: true                            # Follow the planned path closely
         cost_power: 1                            # Linear cost scaling
+        
+        # cost_weight: Importance of staying close to path
+        # Expected: 3.0-8.0 (moderate to high importance)
+        # Impact: Higher weight = tighter path following
+        # 5.0 provides good path following without overpowering obstacle avoidance
         cost_weight: 5.0                         # Moderate path following priority
+        
+        # offset_from_furthest: Look-ahead distance for path following
+        # Expected: 3-10 points (balance responsiveness with stability)
+        # Impact: Higher values = smoother following but less responsive
+        # 5 provides responsive path following
         offset_from_furthest: 5                  # Lookahead offset for path following
+        
+        # threshold_to_consider: Distance where path following activates
+        # Expected: 1.0-3.0 (reasonable proximity to planned path)
+        # Impact: Smaller values = only follow when very close to path
+        # 1.4m activates path following at reasonable distance
         threshold_to_consider: 1.4               # Distance threshold for path following
+        
       PathAngleCritic:
+        # Path angle matching - aligns robot orientation with path direction
         enabled: true                            # Match path orientation
         cost_power: 1                            # Linear cost scaling
+        
+        # cost_weight: Importance of orientation alignment with path
+        # Expected: 1.0-5.0 (lower priority than other critics)
+        # Impact: Higher weight = more emphasis on orientation matching
+        # 2.0 provides gentle orientation guidance without overpowering
         cost_weight: 2.0                         # Low priority for angle matching
+        
+        # offset_from_furthest: Look-ahead for path angle calculation
+        # Expected: 2-8 points (balance smoothness with responsiveness)
+        # Impact: Higher values = smoother angle following
+        # 4 provides reasonable angle following smoothness
         offset_from_furthest: 4                  # Lookahead offset for angle consideration
+        
+        # threshold_to_consider: Distance where angle matching matters
+        # Expected: 0.3-1.0 (closer control than path following)
+        # Impact: Smaller values = angle control only very close to path
+        # 0.5m provides reasonable angle correction zone
         threshold_to_consider: 0.5               # Distance threshold for angle consideration
+        
+        # max_angle_to_furthest: Maximum angle deviation allowed (radians)
+        # Expected: 0.5-2.0 (~30-115 degrees)
+        # Impact: Smaller values = stricter angle following
+        # 1.0 rad (~57 degrees) allows reasonable deviation
         max_angle_to_furthest: 1.0               # Maximum angle deviation allowed
+        
+        # mode: Angle calculation method (0 = forward diff, 1 = backward diff)
+        # Expected: 0 or 1
+        # Impact: Different smoothness characteristics
+        # 0 provides forward difference calculation
         mode: 0                                  # Angle calculation mode
+
+# ============================================================================
+# LOCAL COSTMAP CONFIGURATION
+# ============================================================================
+# Local costmap used for obstacle avoidance and local path planning
+# Moves with robot and updates frequently for dynamic obstacles
 
 local_costmap:
   local_costmap:
     ros__parameters:
-      # Marcus: changed update and publish frequency to 20.0
-      update_frequency: 20.0                     # High frequency updates for dynamic obstacles
-      publish_frequency: 20.0                    # High frequency publishing for responsive control
-      # update_frequency: 10.0                     # Reduced for better performance
-      # publish_frequency: 10.0                    # Reduced for better performance
-      global_frame: odom                         # Use odometry frame for local planning
-      robot_base_frame: base_footprint           # Robot's base frame reference
-      use_sim_time: False                        # Real-time operation
-      transform_tolerance: 0.6                   # TF tolerance for sensor data alignment
-      footprint_clearing_enabled: True           # Clear cells under robot footprint
-      rolling_window: True                       # Moving window follows robot
-      width: 6                                   # Costmap width in meters - local planning area
-      height: 6                                  # Costmap height in meters - local planning area
-      resolution: 0.05                           # Cell resolution (5cm) - fine detail for Go2
-      footprint: "[ [0.360, 0.200], [0.360, -0.200], [-0.450, -0.200], [-0.450, 0.200] ]"  # Go2 physical dimensions
-      # Marcus: added denoise layer
-      # plugins: ["voxel_layer", "inflation_layer"] # Active costmap layers
-      plugins: ["obstacle_layer", "inflation_layer"]
+      # ============================================================================
+      # UPDATE FREQUENCIES
+      # ============================================================================
+      # Control how often costmap is recalculated and published
       
-      # static_layer:
+      # update_frequency: How often to recalculate costmap (Hz)
+      # Expected: 5-50Hz (balance responsiveness with CPU load)
+      # Impact: Higher frequency = more responsive but higher computational cost
+      # 20Hz provides responsive obstacle detection for dynamic environments
+      update_frequency: 20.0                     # High frequency updates for dynamic obstacles
+      # update_frequency: 10.0                     # Alternative: reduced for better performance
+      
+      # publish_frequency: How often to publish costmap data (Hz)
+      # Expected: 5-50Hz (usually matches or is less than update_frequency)
+      # Impact: Higher frequency = more data bandwidth but more responsive control
+      # 20Hz provides high-rate data for responsive local planning
+      publish_frequency: 20.0                    # High frequency publishing for responsive control
+      # publish_frequency: 10.0                    # Alternative: reduced for better performance
+      
+      # ============================================================================
+      # COORDINATE FRAMES AND TIMING
+      # ============================================================================
+      # Frame definitions and synchronization parameters
+      
+      # global_frame: Reference frame for local costmap
+      # Expected: "odom" (for local planning), "map" (for global consistency)
+      # Impact: "odom" provides smooth local planning, "map" ensures global consistency
+      # "odom" preferred for local costmap to avoid map->odom transform delays
+      global_frame: odom                         # Use odometry frame for local planning
+      
+      # robot_base_frame: Robot's base coordinate frame
+      # Expected: "base_link", "base_footprint" (must match robot URDF)
+      # Impact: Must match other Nav2 components and robot's TF tree
+      # base_footprint is standard for ground-based mobile robots
+      robot_base_frame: base_footprint           # Robot's base frame reference
+      
+      # use_sim_time: Whether to use simulation time
+      # Expected: true (simulation), false (real robot)
+      # Impact: Must be consistent across all Nav2 nodes
+      # false required for real robot operation
+      use_sim_time: False                        # Real-time operation
+      
+      # transform_tolerance: Tolerance for transform synchronization (seconds)
+      # Expected: 0.1-1.0 (higher for systems with timing variability)
+      # Impact: Higher values = more tolerance for delayed sensor data
+      # 0.6s accommodates WebRTC latency and sensor synchronization
+      transform_tolerance: 0.6                   # TF tolerance for sensor data alignment
+      
+      # ============================================================================
+      # COSTMAP BEHAVIOR SETTINGS
+      # ============================================================================
+      # Control costmap behavior and clearing mechanisms
+      
+      # footprint_clearing_enabled: Clear costmap cells under robot footprint
+      # Expected: true/false
+      # Impact: true = clear obstacles robot passes through, false = no clearing
+      # true prevents robot from getting stuck in its own sensor shadows
+      footprint_clearing_enabled: True           # Clear cells under robot footprint
+      
+      # rolling_window: Whether costmap moves with robot (local) or is static (global)
+      # Expected: true (local costmap), false (global costmap)
+      # Impact: true = costmap center follows robot, false = fixed world coordinates
+      # true essential for local costmap to provide moving obstacle detection
+      rolling_window: True                       # Moving window follows robot
+      
+      # ============================================================================
+      # COSTMAP DIMENSIONS AND RESOLUTION
+      # ============================================================================
+      # Physical size and detail level of costmap
+      
+      # width: Costmap width in meters
+      # Expected: 4-20 meters (balance coverage with computation)
+      # Impact: Larger width = see obstacles further but more computation
+      # 6m provides good local planning horizon for Go2's speed
+      width: 6                                   # Costmap width in meters - local planning area
+      
+      # height: Costmap height in meters
+      # Expected: 4-20 meters (usually matches width for square costmap)
+      # Impact: Larger height = see obstacles further laterally
+      # 6m provides symmetric coverage around robot
+      height: 6                                  # Costmap height in meters - local planning area
+      
+      # resolution: Cell size in meters (smaller = higher detail)
+      # Expected: 0.02-0.1 meters (balance detail with memory/computation)
+      # Impact: Smaller resolution = more detail but larger memory usage
+      # 0.05m (5cm) provides good detail for Go2's size and precision
+      resolution: 0.05                           # Cell resolution (5cm) - fine detail for Go2
+      
+      # ============================================================================
+      # ROBOT FOOTPRINT DEFINITION
+      # ============================================================================
+      # Physical dimensions of robot for collision checking
+      
+      # footprint: Robot's physical outline as polygon vertices [[x1,y1], [x2,y2], ...]
+      # Expected: Array of [x,y] coordinates in meters, relative to robot center
+      # Impact: Must accurately represent robot's physical dimensions
+      # Go2 dimensions: length ~0.81m, width ~0.40m, with safety margins
+      footprint: "[ [0.360, 0.200], [0.360, -0.200], [-0.450, -0.200], [-0.450, 0.200] ]"  # Go2 physical dimensions
+      
+      # ============================================================================
+      # COSTMAP LAYER PLUGINS
+      # ============================================================================
+      # Active layers that contribute to costmap generation
+      
+      # plugins: List of active costmap layers (order can matter)
+      # Expected: Array of layer names configured below
+      # Impact: Each layer adds different types of obstacles/costs
+      # obstacle_layer for laser data, inflation_layer for safety margins
+      plugins: ["obstacle_layer", "inflation_layer"]
+      # plugins: ["voxel_layer", "inflation_layer"] # Alternative: 3D voxel representation
+      
+      # ============================================================================
+      # COMMENTED/DISABLED LAYER OPTIONS
+      # ============================================================================
+      # Alternative layer configurations (currently disabled)
+      
+      # static_layer: Uses pre-built static map for obstacle data
       #   plugin: "nav2_costmap_2d::StaticLayer"
-      #   map_subscribe_transient_local: True
-
-      # # Marcus: added denoise layer
+      #   map_subscribe_transient_local: True   # QoS setting for map subscription
+      
+      # denoise_layer: Filters out small isolated obstacle clusters
       # denoise_layer:
       #   plugin: "nav2_costmap_2d::DenoiseLayer"
-      #   enabled: true
-      #   minimal_group_size: 2
-      #   group_connectivity_type: 8
+      #   enabled: true                          # Enable noise filtering
+      #   minimal_group_size: 2                  # Minimum obstacle cluster size to keep
+      #   group_connectivity_type: 8             # 8-connected or 4-connected clustering
 
-      # Marcus: replace voxel with obstacle layer
+      # ============================================================================
+      # OBSTACLE LAYER CONFIGURATION
+      # ============================================================================
+      # Primary obstacle detection using laser scan data
+      
       obstacle_layer:
+        # plugin: Implementation for 2D laser scan obstacle detection
+        # Expected: "nav2_costmap_2d::ObstacleLayer" (standard 2D implementation)
+        # Impact: Handles laser scan data for obstacle marking and clearing
+        # ObstacleLayer is simpler than VoxelLayer but sufficient for 2D lidar
         plugin: "nav2_costmap_2d::ObstacleLayer"
+        
+        # enabled: Whether this layer contributes to costmap
+        # Expected: true/false
+        # Impact: false = this layer ignored completely
+        # true = essential for laser-based obstacle detection
         enabled: True
+        
+        # observation_sources: List of sensor sources for obstacle data
+        # Expected: List of sensor source names (configured below)
+        # Impact: Each source provides different types of obstacle information
+        # "scan" refers to the laser scan configuration below
         observation_sources: scan
+        
+        # ============================================================================
+        # LASER SCAN SOURCE CONFIGURATION
+        # ============================================================================
+        # Configuration for processing laser scan data
+        
         scan:
+          # topic: ROS topic name for laser scan data
+          # Expected: Valid ROS topic name matching lidar publisher
+          # Impact: Must match actual laser scan topic from sensor
+          # /scan_restamped indicates timestamp correction applied
           topic: /scan_restamped
+          
+          # clearing: Whether this sensor clears obstacles from costmap
+          # Expected: true/false
+          # Impact: true = clear obstacles robot passes through, false = only mark obstacles
+          # true prevents robot from getting stuck in sensor shadows
           clearing: True
+          
+          # marking: Whether this sensor marks obstacles in costmap
+          # Expected: true/false
+          # Impact: false = sensor only clears, doesn't add obstacles
+          # true = essential for obstacle detection and avoidance
           marking: True
+          
+          # data_type: Type of sensor data being processed
+          # Expected: "LaserScan", "PointCloud2", "DepthCamera"
+          # Impact: Determines parsing and processing algorithms
+          # "LaserScan" for standard 2D lidar data
           data_type: "LaserScan"
+          
+          # inf_is_valid: Whether infinite range readings are considered valid
+          # Expected: true/false
+          # Impact: true = use infinite readings for clearing, false = ignore them
+          # true allows proper clearing in open areas
           inf_is_valid: True                     # Toggles inf values to be counted in the raycast path finding
+          
+          # raytrace_max_range: Maximum range for clearing rays (meters)
+          # Expected: 2.0-10.0 (should be less than laser max range)
+          # Impact: Higher values = clear obstacles at greater distance
+          # 4.0m provides good clearing range without excessive computation
           raytrace_max_range: 4.0
+          
+          # raytrace_min_range: Minimum range for clearing rays (meters)
+          # Expected: 0.0-0.1 (very close to sensor)
+          # Impact: Prevents clearing very close to sensor
+          # 0.05m avoids clearing sensor mounting area
           raytrace_min_range: 0.05
+          
+          # obstacle_max_range: Maximum range to mark obstacles (meters)
+          # Expected: 2.0-6.0 (shorter than raytrace for reliability)
+          # Impact: Higher values = detect distant obstacles (may include noise)
+          # 3.0m provides reliable obstacle detection range
           obstacle_max_range: 3.0
+          
+          # obstacle_min_range: Minimum range to mark obstacles (meters)
+          # Expected: 0.0-0.2 (avoid sensor dead zone)
+          # Impact: Prevents marking obstacles too close to sensor
+          # 0.05m avoids sensor mount and very close reflections
           obstacle_min_range: 0.05
+          
+          # observation_persistence: How long to keep obstacle observations (seconds)
+          # Expected: 0.1-2.0 (balance persistence with dynamic response)
+          # Impact: Higher values = obstacles persist longer (less dynamic)
+          # 0.20s allows for brief sensor occlusion while staying responsive
           observation_persistence: 0.20
+          
+          # expected_update_rate: Expected sensor update frequency (Hz) - DISABLED
+          # Expected: Sensor's actual update rate (e.g., 10-30 Hz)
+          # Impact: Used for timeout detection, commented out = no timeout checking
+          # Disabled to avoid timeout issues with variable WebRTC latency
           # expected_update_rate: 0.18
+          
+          # min_obstacle_height: Minimum height to consider as obstacle (meters)
+          # Expected: 0.0-0.3 (depends on what robot should avoid)
+          # Impact: Higher values = ignore low obstacles robot can pass over
+          # 0.0 = mark all detected obstacles regardless of height
           min_obstacle_height: 0.0
+          
+          # max_obstacle_height: Maximum height to consider as obstacle (meters)
+          # Expected: 1.0-3.0 (depends on sensor and environment)
+          # Impact: Higher values = consider taller obstacles
+          # 2.0m handles typical indoor obstacle heights
           max_obstacle_height: 2.0
 
+      # ============================================================================
+      # VOXEL LAYER CONFIGURATION (DISABLED)
+      # ============================================================================
+      # Alternative 3D obstacle representation - currently disabled in favor of ObstacleLayer
+      
       voxel_layer:
+        # plugin: 3D voxel-based obstacle representation
+        # Expected: "nav2_costmap_2d::VoxelLayer" (3D obstacle handling)
+        # Impact: Provides 3D obstacle tracking vs 2D projection
+        # More complex than ObstacleLayer but handles 3D sensors better
         plugin: "nav2_costmap_2d::VoxelLayer"    # 3D obstacle representation
+        
+        # enabled: Whether this layer is active (currently disabled)
+        # Expected: true/false
+        # Impact: false = layer completely ignored
+        # Disabled because ObstacleLayer sufficient for 2D lidar
         enabled: False                            # Disabled (using ObstacleLayer for LaserScan)
+        
+        # publish_voxel_map: Whether to publish 3D voxel visualization data
+        # Expected: true/false
+        # Impact: true = creates visualization topic for RViz
+        # Useful for debugging 3D obstacle detection
         publish_voxel_map: True                  # Publish 3D voxel data for visualization
+        
+        # origin_z: Z-coordinate origin for voxel grid (meters)
+        # Expected: 0.0 (ground level) or sensor height
+        # Impact: Defines vertical reference point for voxel grid
+        # 0.0 assumes ground-level reference
         origin_z: 0.0                            # Z-origin for voxel grid
+        
+        # z_resolution: Vertical resolution of voxel grid (meters)
+        # Expected: 0.02-0.1 (balance detail with memory)
+        # Impact: Smaller values = finer vertical detail but more memory
+        # 0.05m (5cm) matches horizontal resolution
         z_resolution: 0.05                       # Vertical resolution (5cm)
+        
+        # z_voxels: Number of vertical voxel layers
+        # Expected: 10-40 (depends on environment height)
+        # Impact: More voxels = taller obstacle detection
+        # 16 voxels × 0.05m = 0.8m height coverage
         z_voxels: 16                             # Number of vertical voxels (0.8m height)
+        
+        # max_obstacle_height: Maximum obstacle height to track (meters)
+        # Expected: 1.0-3.0 (depends on environment)
+        # Impact: Higher values = detect taller obstacles
+        # 2.0m handles typical indoor environments
         max_obstacle_height: 2.0                 # Maximum obstacle height to consider
+        
+        # mark_threshold: Minimum voxel occupancy to mark as obstacle
+        # Expected: 0-5 (number of sensor hits required)
+        # Impact: Higher values = more conservative obstacle marking
+        # 0 = mark obstacle on first detection
         mark_threshold: 0                        # Threshold for marking obstacles
+        
+        # observation_sources: Sensor sources (same as ObstacleLayer)
         observation_sources: scan                # Sensor sources for obstacle detection
+        
         scan:
+          # ============================================================================
+          # LOCAL VOXEL LAYER LASER SCAN CONFIGURATION
+          # ============================================================================
+          # Laser scan processing for local 3D voxel obstacle detection
+          
+          # topic: ROS topic for laser scan data in local voxel processing
+          # Expected: Valid ROS topic name matching lidar publisher
+          # Impact: Must match actual laser scan topic for local 3D obstacle detection
+          # /scan_restamped provides timestamp-corrected laser data for local voxel layer
           topic: /scan_restamped                 # Restamped laser scan topic
+          
+          # max_obstacle_height: Maximum obstacle height for local voxel processing (meters)
+          # Expected: 1.0-3.0 (depends on local environment and sensor capabilities)
+          # Impact: Higher values = consider taller obstacles in local 3D planning
+          # 2.0m handles typical indoor obstacle heights for local voxel representation
           max_obstacle_height: 2.0               # Maximum height for laser obstacles
+          
+          # clearing: Whether this sensor clears obstacles in local voxel map
+          # Expected: true/false
+          # Impact: true = remove obstacles robot passes through, false = only add
+          # true prevents persistent obstacle artifacts in dynamic local environment
           clearing: True                         # Enable obstacle clearing
+          
+          # marking: Whether this sensor marks new obstacles in local voxel map
+          # Expected: true/false
+          # Impact: false = sensor only clears, doesn't detect new obstacles
+          # true essential for detecting new obstacles in local 3D planning
           marking: True                          # Enable obstacle marking
+          
+          # data_type: Type of sensor data for local voxel processing
+          # Expected: "LaserScan", "PointCloud2", "DepthCamera"
+          # Impact: Determines parsing algorithm for local 3D obstacle detection
+          # "LaserScan" for standard 2D lidar integration in local voxel layer
           data_type: "LaserScan"                 # Type of sensor data
+          
+          # raytrace_max_range: Maximum range for clearing rays in local voxel map (meters)
+          # Expected: 2.0-6.0 (balance local accuracy with computational load)
+          # Impact: Higher values = clear distant obstacles in local map
+          # 3.0m provides good local clearing range without excessive computation
           raytrace_max_range: 3.0                # Maximum range for raytracing
+          
+          # raytrace_min_range: Minimum range for clearing rays in local voxel map (meters)
+          # Expected: 0.0-0.1 (avoid sensor dead zone)
+          # Impact: Prevents clearing very close to sensor mount
+          # 0.05m avoids sensor mounting area in local voxel clearing
           raytrace_min_range: 0.05               # Minimum range for raytracing
+          
+          # obstacle_max_range: Maximum range for obstacle detection in local voxel map (meters)
+          # Expected: 2.0-4.0 (shorter than raytrace for local reliability)
+          # Impact: Higher values = detect more distant obstacles (may include noise)
+          # 2.5m provides reliable local detection range for voxel obstacle marking
           obstacle_max_range: 2.5                # Maximum range for obstacle detection
+          
+          # obstacle_min_range: Minimum range for obstacle detection in local voxel map (meters)
+          # Expected: 0.0-0.2 (avoid sensor dead zone)
+          # Impact: Prevents marking obstacles too close to sensor
+          # 0.05m avoids sensor mount interference in local voxel obstacle detection
           obstacle_min_range: 0.05               # Minimum range for obstacle detection
-          # observation_persistence: 0.35
-          # observation_persistence: 0.10          # Time to keep observations (100ms)
-          observation_persistence: 0.05          # Reduced for faster obstacle clearing
-          # expected_update_rate: 0.18
+          
+          # observation_persistence: How long to keep voxel observations (seconds)
+          # Expected: 0.05-0.5 (much shorter than global for dynamic response)
+          # Impact: Higher values = obstacles persist longer (less dynamic response)
+          # Multiple options shown: 0.35s (original), 0.10s (reduced), 0.05s (current)
+          # observation_persistence: 0.35        # Original: longer persistence
+          # observation_persistence: 0.10        # Reduced: moderate persistence (100ms)
+          observation_persistence: 0.05          # Current: fast obstacle clearing for dynamic local environment
+          
+          # expected_update_rate: Expected sensor update frequency (DISABLED)
+          # Expected: Sensor's actual rate (e.g., 10-30 Hz)
+          # Impact: Used for timeout detection, disabled = no timeout checking
+          # Commented out to avoid timeout issues with variable WebRTC communication latency
+          # expected_update_rate: 0.18           # Disabled to avoid timeout issues
+          
+          # min_obstacle_height: Minimum height to consider as obstacle (meters)
+          # Expected: 0.0-0.2 (what robot should avoid)
+          # Impact: Higher values = ignore small obstacles robot can traverse
+          # 0.1m ignores very small obstacles (Go2 can step over ~8cm)
           min_obstacle_height: 0.1               # Minimum obstacle height - Go2 can step over ~8cm obstacles, tune based on environment
+          
+          # max_obstacle_height: Maximum height for this sensor (meters)
+          # Expected: 0.3-2.0 (sensor-specific limit)
+          # Impact: Limits how tall obstacles this sensor can detect
+          # 0.5m for local planning focus on immediate obstacles
           max_obstacle_height: 0.5               # Maximum obstacle height for local planning
 
+      # ============================================================================
+      # INFLATION LAYER CONFIGURATION  
+      # ============================================================================
+      # Creates safety buffer around obstacles by inflating their cost
+      
       inflation_layer:
+        # plugin: Obstacle inflation algorithm
+        # Expected: "nav2_costmap_2d::InflationLayer" (standard inflation)
+        # Impact: Creates graduated cost field around obstacles for safety
+        # Essential for safe navigation - prevents robot from touching obstacles
         plugin: "nav2_costmap_2d::InflationLayer" # Obstacle inflation for safety margin
-        # cost_scaling_factor: 5.0                 # Aggressive cost scaling around obstacles
-        # inflation_radius: 0.45                   # Large safety margin - conservative for Go2
-        cost_scaling_factor: 2.5                  # Reduce from 5.0
-        inflation_radius: 0.25                   # Reduce from 0.45
+        
+        # cost_scaling_factor: How quickly cost increases near obstacles
+        # Expected: 1.0-10.0 (higher = steeper cost gradient)
+        # Impact: Higher values = avoid obstacles more aggressively
+        # 2.5 provides reasonable safety without overly restricting paths
+        # cost_scaling_factor: 5.0                 # Original: aggressive cost scaling
+        cost_scaling_factor: 2.5                  # Reduced from 5.0 for less aggressive avoidance
+        
+        # inflation_radius: Distance to inflate obstacles (meters)
+        # Expected: 0.2-1.0 (larger than robot width for safety)
+        # Impact: Larger radius = robot stays further from obstacles
+        # 0.25m provides good safety margin for Go2 without excessive path restriction
+        # inflation_radius: 0.45                   # Original: large safety margin
+        inflation_radius: 0.25                   # Reduced from 0.45 for better maneuverability
+
+# ============================================================================
+# GLOBAL COSTMAP CONFIGURATION
+# ============================================================================
+# Global costmap used for long-range path planning and global navigation
+# Uses static map data and covers entire known environment
 
 global_costmap:
   global_costmap:
     ros__parameters:
+      # ============================================================================
+      # UPDATE FREQUENCIES
+      # ============================================================================
+      # Global costmap updates less frequently than local costmap
+      
+      # update_frequency: How often to recalculate global costmap (Hz)
+      # Expected: 1-20Hz (much lower than local costmap acceptable)
+      # Impact: Higher frequency = more responsive but higher computational cost
+      # 20Hz provides responsive updates but may be high for large maps
       update_frequency: 20.0                     # High frequency updates for dynamic mapping
+      
+      # publish_frequency: How often to publish global costmap data (Hz)  
+      # Expected: 1-20Hz (balance data bandwidth with utility)
+      # Impact: Higher frequency = more data but more responsive planning
+      # 20Hz matches update frequency for consistent data flow
       publish_frequency: 20.0                    # High frequency publishing
+      
+      # ============================================================================
+      # COORDINATE FRAMES
+      # ============================================================================
+      # Frame definitions for global planning
+      
+      # global_frame: Reference frame for global costmap
+      # Expected: "map" (for global planning), "odom" (for local consistency)  
+      # Impact: "map" provides global consistency, "odom" avoids transform delays
+      # "map" essential for global path planning across entire environment
       global_frame: map                          # Use map frame for global planning
+      
+      # robot_base_frame: Robot's base coordinate frame
+      # Expected: "base_link", "base_footprint" (must match robot URDF)
+      # Impact: Must match other Nav2 components and robot's TF tree
+      # base_footprint is standard for ground-based mobile robots
       robot_base_frame: base_footprint           # Robot's base frame reference
-      # Marcus: changed use_sim_time to False
+      
+      # use_sim_time: Whether to use simulation time
+      # Expected: true (simulation), false (real robot)
+      # Impact: Must be consistent across all Nav2 nodes
+      # false required for real robot operation
       use_sim_time: False                        # Real-time operation
+      
+      # ============================================================================
+      # COSTMAP PROPERTIES
+      # ============================================================================
+      # Size, resolution, and behavior of global costmap
+      
+      # resolution: Cell size in meters (should match local costmap)
+      # Expected: 0.02-0.1 meters (balance detail with memory)
+      # Impact: Finer resolution = more detail but larger memory/computation
+      # 0.05m matches local costmap for consistent planning
       resolution: 0.05                           # Cell resolution (5cm) - matches local costmap
+      
+      # track_unknown_space: Whether to track unexplored areas
+      # Expected: true/false
+      # Impact: true = distinguish between free space and unexplored
+      # true enables exploration behaviors and frontier detection
       track_unknown_space: True                  # Track unexplored areas
+      
+      # static_map: Whether costmap size comes from static map
+      # Expected: true (uses map dimensions), false (uses explicit width/height)
+      # Impact: true = costmap sized to match loaded map
+      # true standard for SLAM-based systems with pre-existing maps
       static_map: True                           # Use static map as base layer
+      
+      # Map dimensions (commented out because static_map: true)
+      # width/height: Explicit costmap dimensions if static_map: false
+      # origin_x/origin_y: Costmap origin if not using static map
+      # These are overridden by static map when static_map: true
       # width: 500                                 # Static map supplies size
-      # height: 500                                # Static map supplies size
+      # height: 500                                # Static map supplies size  
       # origin_x: -250.0                           # Static map supplies origin
-      # origin_y: -250.0                           # Static map supplies origin  
+      # origin_y: -250.0                           # Static map supplies origin
+      
+      # ============================================================================
+      # ROBOT FOOTPRINT (same as local costmap)
+      # ============================================================================
+      # Physical dimensions of robot for collision checking
+      
+      # footprint: Robot's physical outline for collision checking
+      # Expected: Array of [x,y] coordinates in meters
+      # Impact: Must accurately represent robot's physical dimensions
+      # Same as local costmap - Go2 dimensions with safety margins
       footprint: "[ [0.360, 0.200], [0.360, -0.200], [-0.450, -0.200], [-0.450, 0.200] ]"  # Go2 physical dimensions
+      
+      # ============================================================================
+      # COSTMAP LAYER PLUGINS
+      # ============================================================================
+      # Layers that contribute to global costmap generation
+      
+      # plugins: List of active costmap layers (order matters)
+      # Expected: Array of layer names configured below
+      # Impact: Each layer adds different types of obstacles/costs
+      # static_layer for map data, inflation_layer for safety margins
       plugins: ["static_layer", "inflation_layer"]  # Active costmap layers
 
+      # ============================================================================
+      # STATIC LAYER CONFIGURATION
+      # ============================================================================
+      # Loads pre-built static map as base layer for global planning
+      
       static_layer:
+        # plugin: Static map loading implementation
+        # Expected: "nav2_costmap_2d::StaticLayer" (standard static map handler)
+        # Impact: Loads and maintains static map data as costmap base
+        # Essential for navigation in mapped environments
         plugin: "nav2_costmap_2d::StaticLayer"   # Static map layer
+        
+        # map_subscribe_transient_local: QoS setting for map topic subscription
+        # Expected: true/false
+        # Impact: true = reliable delivery for map data, false = best-effort
+        # true ensures map data is reliably received even with timing issues
         map_subscribe_transient_local: True      # Use transient local QoS for reliability
 
-      # Marcus: added denoise layer
+      # ============================================================================
+      # COMMENTED/DISABLED LAYER OPTIONS
+      # ============================================================================
+      # Alternative layer configurations (currently disabled)
+      
+      # denoise_layer: Filters out small isolated obstacle clusters
       # denoise_layer:
       #   plugin: "nav2_costmap_2d::DenoiseLayer"
-      #   enabled: true
-      #   minimal_group_size: 2
-      #   group_connectivity_type: 8
+      #   enabled: true                          # Enable noise filtering
+      #   minimal_group_size: 2                  # Minimum obstacle cluster size to keep
+      #   group_connectivity_type: 8             # 8-connected or 4-connected clustering
 
+      # ============================================================================
+      # VOXEL LAYER CONFIGURATION (DISABLED)
+      # ============================================================================
+      # 3D obstacle representation - disabled for global costmap
+      
       voxel_layer:
+        # plugin: 3D voxel-based obstacle representation
+        # Expected: "nav2_costmap_2d::VoxelLayer" (3D obstacle handling)
+        # Impact: Would provide 3D obstacle tracking for global planning
+        # Disabled for global costmap to focus on static obstacles only
         plugin: "nav2_costmap_2d::VoxelLayer"    # 3D obstacle representation
+        
+        # enabled: Whether this layer is active (currently disabled)
+        # Expected: true/false
+        # Impact: false = layer completely ignored
+        # Disabled for global costmap - static + inflation sufficient
         enabled: False                            # Disabled (static + inflation only)
-        publish_voxel_map: True                  # Publish 3D voxel data
-        origin_z: 0.0                            # Z-origin for voxel grid
-        z_resolution: 0.05                       # Vertical resolution (5cm)
-        z_voxels: 16                             # Number of vertical voxels
-        max_obstacle_height: 2.0                 # Maximum obstacle height
-        mark_threshold: 0                        # Threshold for marking obstacles
-        observation_sources: scan                # Sensor sources
+        
+        # ============================================================================
+        # VOXEL LAYER CORE CONFIGURATION PARAMETERS (DISABLED)
+        # ============================================================================
+        # 3D voxel grid configuration for obstacle representation
+        
+        # publish_voxel_map: Whether to publish 3D voxel visualization data
+        # Expected: true/false
+        # Impact: true = creates 3D visualization topic for RViz debugging
+        # true useful for development and debugging 3D obstacle detection
+        publish_voxel_map: True                  # Publish 3D voxel data for visualization
+        
+        # origin_z: Z-coordinate origin for voxel grid relative to robot (meters)
+        # Expected: 0.0 (ground level) or sensor height offset
+        # Impact: Defines vertical reference point for 3D voxel grid
+        # 0.0 assumes ground-level coordinate reference
+        origin_z: 0.0                            # Z-origin for voxel grid (ground level)
+        
+        # z_resolution: Vertical resolution of voxel grid cells (meters)
+        # Expected: 0.02-0.1 (balance between detail and memory usage)
+        # Impact: Smaller values = finer vertical detail but more memory/computation
+        # 0.05m (5cm) provides good vertical resolution matching horizontal
+        z_resolution: 0.05                       # Vertical resolution (5cm cells)
+        
+        # z_voxels: Number of vertical voxel layers in the 3D grid
+        # Expected: 10-50 (depends on environment height and z_resolution)
+        # Impact: More voxels = detect taller obstacles but use more memory
+        # 16 voxels × 0.05m = 0.8m total height coverage for obstacles
+        z_voxels: 16                             # Number of vertical voxels (0.8m total height)
+        
+        # max_obstacle_height: Maximum obstacle height to track in voxel grid (meters)
+        # Expected: 1.0-4.0 (should match or exceed z_voxels × z_resolution)
+        # Impact: Higher values = consider taller obstacles in 3D representation
+        # 2.0m handles typical indoor obstacles (exceeds 0.8m voxel height)
+        max_obstacle_height: 2.0                 # Maximum obstacle height to consider
+        
+        # mark_threshold: Minimum voxel occupancy count to mark cell as obstacle
+        # Expected: 0-5 (number of sensor observations required)
+        # Impact: Higher values = more conservative obstacle marking (reduce noise)
+        # 0 = mark obstacle on first sensor detection (most responsive)
+        mark_threshold: 0                        # Mark obstacles on first detection
+        
+        # observation_sources: List of sensor sources providing 3D obstacle data
+        # Expected: Array of sensor source names (configured below)
+        # Impact: Each source contributes different types of 3D obstacle information
+        # "scan" refers to the laser scan configuration for voxel processing
+        observation_sources: scan                # Sensor sources for 3D obstacle detection
         scan:
+          # topic: ROS topic for laser scan data in global voxel layer
+          # Expected: Valid ROS topic name matching sensor publisher
+          # Impact: Must match actual laser scan topic for global obstacle data
+          # /scan_restamped provides timestamp-corrected data for global planning
           topic: /scan_restamped                 # Restamped laser scan topic
+          
+          # max_obstacle_height: Maximum obstacle height for global voxel processing (meters)
+          # Expected: 1.0-3.0 (should match global environment needs)
+          # Impact: Higher values = consider taller obstacles in global planning
+          # 2.0m handles typical indoor obstacle heights for global path planning
           max_obstacle_height: 2.0               # Maximum height for laser obstacles
+          
+          # clearing: Whether this sensor clears obstacles in global voxel map
+          # Expected: true/false
+          # Impact: true = remove obstacles robot passes through, false = only add
+          # true prevents permanent obstacle artifacts in global map
           clearing: True                         # Enable obstacle clearing
+          
+          # marking: Whether this sensor marks new obstacles in global voxel map
+          # Expected: true/false
+          # Impact: false = sensor only clears, doesn't detect new obstacles
+          # true essential for detecting new obstacles in global planning
           marking: True                          # Enable obstacle marking
+          
+          # data_type: Type of sensor data for global voxel processing
+          # Expected: "LaserScan", "PointCloud2", "DepthCamera"
+          # Impact: Determines parsing algorithm for global obstacle detection
+          # "LaserScan" for standard 2D lidar integration in global planning
           data_type: "LaserScan"                 # Type of sensor data
+          
+          # raytrace_max_range: Maximum range for clearing rays in global map (meters)
+          # Expected: 2.0-8.0 (shorter than local for global stability)
+          # Impact: Higher values = clear distant obstacles in global map
+          # 3.0m provides moderate clearing range for global consistency
           raytrace_max_range: 3.0                # Maximum range for raytracing
+          
+          # raytrace_min_range: Minimum range for clearing rays in global map (meters)
+          # Expected: 0.0-0.1 (avoid sensor dead zone)
+          # Impact: Prevents clearing very close to sensor mount
+          # 0.05m avoids sensor mounting area in global map clearing
           raytrace_min_range: 0.05               # Minimum range for raytracing
+          
+          # obstacle_max_range: Maximum range for obstacle detection in global map (meters)
+          # Expected: 2.0-5.0 (balance reliability with range)
+          # Impact: Higher values = detect more distant obstacles (may include noise)
+          # 2.5m provides reliable detection range for global planning
           obstacle_max_range: 2.5                # Maximum range for obstacle detection
+          
+          # obstacle_min_range: Minimum range for obstacle detection in global map (meters)
+          # Expected: 0.0-0.2 (avoid sensor dead zone)
+          # Impact: Prevents marking obstacles too close to sensor
+          # 0.05m avoids sensor mount interference in global obstacle detection
           obstacle_min_range: 0.05               # Minimum range for obstacle detection
+          
+          # observation_persistence: How long to keep observations (global uses longer)
+          # Expected: 0.2-2.0 (longer than local for stability)
+          # Impact: Higher values = more persistent obstacles in global map
+          # 0.35s provides longer persistence for global planning stability
           observation_persistence: 0.35          # Longer persistence for global map
-          # expected_update_rate: 0.18
-          min_obstacle_height: 0.1               # Minimum obstacle height
-          max_obstacle_height: 0.5               # Maximum obstacle height
+          
+          # expected_update_rate: Expected sensor frequency (DISABLED)
+          # Expected: Sensor's actual rate (e.g., 10-30 Hz)
+          # Impact: Used for timeout detection, disabled = no timeout checking
+          # Commented out to avoid timeout issues with WebRTC variable latency
+          # expected_update_rate: 0.18           # Disabled to avoid timeout issues
+          
+          # min_obstacle_height: Minimum obstacle height to consider (meters)
+          # Expected: 0.0-0.3 (depends on what robot should avoid in global planning)
+          # Impact: Higher values = ignore low obstacles robot can traverse
+          # 0.1m ignores small obstacles that Go2 can step over (~8cm capability)
+          min_obstacle_height: 0.1               # Minimum obstacle height - Go2 step-over capability
+          
+          # max_obstacle_height: Maximum obstacle height for global voxel layer (meters)
+          # Expected: 0.3-2.0 (focus on relevant obstacle heights)
+          # Impact: Higher values = consider taller obstacles in global planning
+          # 0.5m focuses on immediate navigation obstacles for global path planning
+          max_obstacle_height: 0.5               # Maximum obstacle height for global planning focus
 
+      # ============================================================================
+      # GLOBAL INFLATION LAYER CONFIGURATION
+      # ============================================================================
+      # Creates safety buffer around static map obstacles
+      
       inflation_layer:
+        # plugin: Obstacle inflation algorithm for global planning
+        # Expected: "nav2_costmap_2d::InflationLayer" (standard inflation)
+        # Impact: Creates cost gradient around static map obstacles
+        # Essential for global path planning safety margins
         plugin: "nav2_costmap_2d::InflationLayer" # Obstacle inflation layer
-        # cost_scaling_factor: 4.0                  # Strong cost scaling around obstacles
-        # inflation_radius: 0.45                    # Large safety margin
-        cost_scaling_factor: 2.0                  # Reduce from 4.0
-        inflation_radius: 0.25                    # Reduce from 0.45
+        
+        # cost_scaling_factor: How quickly cost increases near obstacles
+        # Expected: 1.0-10.0 (higher = steeper cost gradient)
+        # Impact: Higher values = global paths avoid obstacles more aggressively
+        # 2.0 provides moderate global inflation (less aggressive than local)
+        # cost_scaling_factor: 4.0                  # Original: strong cost scaling
+        cost_scaling_factor: 2.0                  # Reduced from 4.0 for better global planning
+        
+        # inflation_radius: Distance to inflate obstacles for global planning (meters)
+        # Expected: 0.2-1.0 (can be different from local costmap)
+        # Impact: Larger radius = global paths stay further from map obstacles
+        # 0.25m matches local costmap for consistent safety margins
+        # inflation_radius: 0.45                    # Original: large safety margin
+        inflation_radius: 0.25                    # Reduced from 0.45 for better path options
+
+# ============================================================================
+# MAP SAVER CONFIGURATION
+# ============================================================================
+# Handles saving maps from SLAM or static map sources to files
+# Essential for persistent map storage and map distribution
 
 map_saver:
   ros__parameters:
+    # use_sim_time: Whether to use simulation time
+    # Expected: true (simulation), false (real robot)
+    # Impact: Must be consistent with other Nav2 components
+    # false required for real robot operation
     use_sim_time: False                         # Real-time operation for map saving
+    
+    # save_map_timeout: Maximum time to wait for map save operations (seconds)
+    # Expected: 3.0-15.0 (depends on map size and storage speed)
+    # Impact: Higher values = more patience for large map saves
+    # 5.0s handles typical indoor maps on standard storage
     save_map_timeout: 5.0                       # Timeout for map saving operations
+    
+    # free_thresh_default: Probability threshold for marking cells as free space
+    # Expected: 0.1-0.4 (balance between conservative and permissive)
+    # Impact: Lower values = mark more cells as free (less conservative)
+    # 0.25 provides reasonable threshold for free space determination
     free_thresh_default: 0.25                   # Threshold for free space in saved maps
+    
+    # occupied_thresh_default: Probability threshold for marking cells as occupied
+    # Expected: 0.5-0.8 (should be higher than free_thresh_default)
+    # Impact: Higher values = require more certainty to mark as obstacle
+    # 0.65 provides good balance between false positives and missed obstacles
     occupied_thresh_default: 0.65               # Threshold for occupied space in saved maps
+    
+    # map_subscribe_transient_local: QoS setting for map topic subscription
+    # Expected: true/false
+    # Impact: true = reliable map data delivery, false = best-effort
+    # true ensures complete map data reception for accurate saving
     map_subscribe_transient_local: True         # Use transient local QoS
 
-# Marcus: switch from `gridbased` to `simple_smoother`
+# ============================================================================
+# PATH SMOOTHER SERVER CONFIGURATION
+# ============================================================================
+# Post-processes planned paths to create smoother, more drivable trajectories
+# Reduces sharp turns and creates more natural robot motion
+
 smoother_server:
   ros__parameters:
+    # smoother_plugins: List of available path smoothing algorithms
+    # Expected: Array of smoother plugin names
+    # Impact: Defines which smoothing algorithms are available
+    # "simple_smoother" provides basic but effective path smoothing
     smoother_plugins: ["simple_smoother"]       # Available path smoothing plugins
+    
+    # ============================================================================
+    # SIMPLE SMOOTHER CONFIGURATION
+    # ============================================================================
+    # Basic iterative smoothing algorithm for path refinement
+    
     simple_smoother:
+      # plugin: Path smoothing algorithm implementation
+      # Expected: "nav2_smoother::SimpleSmoother" (basic iterative smoother)
+      # Impact: SimpleSmoother uses iterative averaging for smooth paths
+      # Alternative: Savitzky-Golay or other advanced smoothing algorithms
       plugin: "nav2_smoother::SimpleSmoother"   # Simple path smoothing algorithm
+      
+      # tolerance: Convergence tolerance for iterative smoothing
+      # Expected: 1.0e-8 to 1.0e-12 (very small for numerical precision)
+      # Impact: Smaller values = more precise smoothing but more iterations
+      # 1.0e-10 provides high precision smoothing convergence
       tolerance: 1.0e-10                        # Convergence tolerance for smoothing
+      
+      # max_its: Maximum iterations for smoothing algorithm
+      # Expected: 500-5000 (balance quality with computation time)
+      # Impact: More iterations = smoother paths but longer computation
+      # 1000 provides good smoothing quality without excessive processing time
       max_its: 1000                             # Maximum iterations for smoothing
+      
+      # do_refinement: Enable iterative refinement of smoothed path
+      # Expected: true/false
+      # Impact: true = additional passes for higher quality, false = single pass
+      # true provides better smoothing quality at cost of computation time
       do_refinement: True                       # Enable iterative refinement
+
+# ============================================================================
+# PLANNER SERVER CONFIGURATION
+# ============================================================================
+# Computes global paths from current position to goal using costmap data
+# Central component for long-range navigation planning
 
 planner_server:
   ros__parameters:
+    # ============================================================================
+    # BASIC CONFIGURATION
+    # ============================================================================
+    # Core settings for path planning operation
+    
+    # use_sim_time: Whether to use simulation time
+    # Expected: true (simulation), false (real robot)
+    # Impact: Must be consistent with other Nav2 components
+    # false required for real robot operation
     use_sim_time: False                         # Real-time operation for path planning
-    # expected_planner_frequency: 2.0             # Conservative for external computer - could increase to 3-5Hz for better replanning
-    # expected_planner_frequency: 3.0             # Conservative for external computer - could increase to 3-5Hz for better replanning
-    # expected_planner_frequency: 5.0             # Increased for faster replanning
+    
+    # expected_planner_frequency: Target planning frequency (Hz)
+    # Expected: 1-10Hz (balance responsiveness with computation)
+    # Impact: Higher frequency = more responsive replanning but more CPU
+    # 5.0Hz provides good replanning responsiveness for dynamic environments
+    # expected_planner_frequency: 2.0             # Conservative for limited compute
+    # expected_planner_frequency: 3.0             # Moderate responsiveness
     expected_planner_frequency: 5.0             # Increased for faster replanning
+    
+    # planner_plugins: List of available path planning algorithms
+    # Expected: Array of planner plugin names
+    # Impact: Defines which planning algorithms are available for selection
+    # "GridBased" refers to the SmacPlanner2D configuration below
     planner_plugins: ["GridBased"]              # Available planning algorithms
+    
+    # tf_buffer_duration: Transform buffer duration (seconds)
+    # Expected: 30-60 seconds (balance memory with transform history)
+    # Impact: Longer duration = better handling of delayed transforms
+    # 50.0s essential for WebRTC systems with variable latency
     tf_buffer_duration: 50.0                    # Large TF buffer for timing robustness
+    
+    # transform_tolerance: Transform timestamp tolerance (seconds)
+    # Expected: 0.1-1.0 (higher for systems with timing issues)
+    # Impact: Higher values = more tolerance for delayed transform data
+    # 0.6s accommodates WebRTC communication latency
     transform_tolerance: 0.6                    # Transform synchronization tolerance
 
+    # ============================================================================
+    # SMAC PLANNER 2D CONFIGURATION (GridBased)
+    # ============================================================================
+    # State Lattice planner for 2D grid-based path planning
+    
     GridBased:
+      # plugin: Path planning algorithm implementation
+      # Expected: "nav2_smac_planner/SmacPlanner2D" (2D grid planner)
+      # Impact: SmacPlanner2D provides efficient A*/Dijkstra planning
+      # Alternative: nav2_navfn_planner for simpler needs
       plugin: "nav2_smac_planner/SmacPlanner2D" # 2D grid-based planner
+      
+      # allow_unknown: Whether to plan through unknown (unexplored) areas
+      # Expected: true/false
+      # Impact: true = can plan through unexplored space, false = only through known free space
+      # true enables exploration and planning to unreachable areas
       allow_unknown: true                       # Allow planning through unknown space
+      
+      # downsample_costmap: Whether to reduce costmap resolution for planning
+      # Expected: true/false
+      # Impact: true = faster planning but less precise, false = full precision
+      # false maintains full costmap detail for accurate planning
       downsample_costmap: false                 # Use full resolution costmap
+      
+      # tolerance: Goal tolerance for path planning (meters)
+      # Expected: 0.05-0.3 (should be smaller than controller tolerance)
+      # Impact: Smaller values = more precise goal reaching in planned path
+      # 0.1m provides good planning precision
       tolerance: 0.1                            # Goal tolerance for planning
+      
+      # motion_model_for_search: Grid connectivity for path search
+      # Expected: "MOORE" (8-connected), "VON_NEUMANN" (4-connected)
+      # Impact: MOORE allows diagonal movement, VON_NEUMANN only cardinal directions
+      # MOORE provides more natural paths with diagonal movements
       motion_model_for_search: "MOORE"          # 8-connected grid search
+      
+      # use_astar: Whether to use A* heuristic search vs Dijkstra
+      # Expected: true/false
+      # Impact: true = faster search with heuristic, false = guaranteed optimal with Dijkstra
+      # false provides optimal paths but may be slower for complex environments
       use_astar: false                          # Use Dijkstra instead of A*
+      
+      # max_iterations: Maximum search iterations before giving up
+      # Expected: 50000-500000 (balance thoroughness with timeout)
+      # Impact: Higher values = more thorough search but longer timeout risk
+      # 200000 provides extensive search capability for complex environments
       max_iterations: 200000                    # Maximum search iterations - external computer can handle higher for complex paths
+      
+      # minimum_turning_radius: Minimum turning radius constraint (meters)
+      # Expected: 0.0 (disabled for 2D), positive value for car-like robots
+      # Impact: Larger values = enforce wider turns, 0.0 = no constraint
+      # 0.0 appropriate for omnidirectional robots like Go2
       minimum_turning_radius: 0.0               # Not used for 2D planning
+      
+      # analytic_expansion: Enable direct path expansion near goal
+      # Expected: true/false
+      # Impact: true = faster goal reaching with direct paths, false = grid-only search
+      # true provides more efficient final approach to goals
       analytic_expansion: true                  # Enable analytic path expansion near goal
+
+# ============================================================================
+# BEHAVIOR SERVER CONFIGURATION
+# ============================================================================
+# Manages recovery behaviors when navigation fails (stuck, no path, etc.)
+# Provides atomic behaviors that can be used by behavior trees for recovery
 
 behavior_server:
   ros__parameters:
+    # ============================================================================
+    # COSTMAP TOPIC CONFIGURATION
+    # ============================================================================
+    # Topics for accessing costmap data needed by recovery behaviors
+    
+    # local_costmap_topic: Topic for local costmap data
+    # Expected: Valid ROS topic name matching local costmap publisher
+    # Impact: Must match local costmap configuration for obstacle awareness
+    # Raw costmap data provides direct access for behavior planning
     local_costmap_topic: local_costmap/costmap_raw      # Local costmap for behaviors
+    
+    # global_costmap_topic: Topic for global costmap data
+    # Expected: Valid ROS topic name matching global costmap publisher
+    # Impact: Must match global costmap configuration for global context
+    # Used by behaviors that need global obstacle information
     global_costmap_topic: global_costmap/costmap_raw    # Global costmap for behaviors
+    
+    # local_footprint_topic: Topic for robot footprint from local costmap
+    # Expected: Valid ROS topic name for footprint data
+    # Impact: Provides robot dimensions for collision checking in behaviors
+    # Must match local costmap footprint publisher
     local_footprint_topic: local_costmap/published_footprint   # Local footprint topic
+    
+    # global_footprint_topic: Topic for robot footprint from global costmap
+    # Expected: Valid ROS topic name for footprint data
+    # Impact: Provides robot dimensions for global behavior planning
+    # Must match global costmap footprint publisher
     global_footprint_topic: global_costmap/published_footprint # Global footprint topic
+    
+    # ============================================================================
+    # EXECUTION TIMING PARAMETERS
+    # ============================================================================
+    # Control behavior execution frequency and timeouts
+    
+    # cycle_frequency: Behavior execution frequency (Hz)
+    # Expected: 5-20Hz (balance responsiveness with CPU load)
+    # Impact: Higher frequency = more responsive behaviors but more CPU
+    # 10.0Hz provides good responsiveness for recovery behaviors
     cycle_frequency: 10.0                      # Behavior execution frequency
+    
+    # tf_buffer_duration: Transform buffer duration (seconds)
+    # Expected: 30-60 seconds (handle transform delays)
+    # Impact: Longer duration = better handling of delayed transforms
+    # 50.0s essential for WebRTC systems with variable latency
     tf_buffer_duration: 50.0                   # Large TF buffer duration
+    
+    # transform_tolerance: Transform timestamp tolerance (seconds)
+    # Expected: 0.1-1.0 (higher for systems with timing issues)
+    # Impact: Higher values = more tolerance for delayed transforms
+    # 0.6s accommodates WebRTC communication latency
     transform_tolerance: 0.6                   # Transform timing tolerance
+    
+    # ============================================================================
+    # AVAILABLE BEHAVIOR PLUGINS
+    # ============================================================================
+    # List of recovery behaviors available for behavior tree execution
+    
+    # behavior_plugins: List of available recovery behavior implementations
+    # Expected: Array of behavior plugin names (configured below)
+    # Impact: Defines which recovery behaviors can be used by behavior trees
+    # Each behavior provides specific recovery capability
     behavior_plugins: ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]  # Available recovery behaviors
+    
+    # ============================================================================
+    # INDIVIDUAL BEHAVIOR CONFIGURATIONS
+    # ============================================================================
+    # Specific settings for each recovery behavior type
+    
     spin:
+      # plugin: In-place rotation behavior implementation
+      # Expected: "nav2_behaviors/Spin" (standard rotation behavior)
+      # Impact: Provides 360-degree rotation capability for localization recovery
+      # Used when robot loses localization or needs to clear obstacles
       plugin: "nav2_behaviors/Spin"             # In-place rotation behavior
+      
     backup:
+      # plugin: Reverse movement behavior implementation
+      # Expected: "nav2_behaviors/BackUp" (standard backup behavior)
+      # Impact: Provides reverse movement for escaping tight spaces
+      # Critical recovery behavior when robot gets too close to obstacles
       plugin: "nav2_behaviors/BackUp"          # Reverse movement behavior
-      # Marcus: from 2.5 to 1.2
+      
+      # acceleration_limit: Maximum acceleration for backup movement (m/s²)
+      # Expected: 0.5-2.0 (should be safe and controlled)
+      # Impact: Higher values = faster acceleration but less controlled
+      # 1.0 m/s² provides controlled backup acceleration (reduced from 2.5 for safety)
       acceleration_limit: 1.0                  # Acceleration limit for backup
-      # Marcus: from 0.1 to 0.05
+      
+      # minimum_speed: Minimum speed for backup behavior (m/s)
+      # Expected: 0.001-0.1 (very slow for precise control)
+      # Impact: Higher values = faster minimum backup but less precision
+      # 0.001 m/s allows very precise backup movements (reduced from 0.1 for precision)
       minimum_speed: 0.001                     # Minimum backup speed
+      
     drive_on_heading:
+      # plugin: Straight-line driving behavior implementation
+      # Expected: "nav2_behaviors/DriveOnHeading" (standard forward driving)
+      # Impact: Provides controlled forward movement on specified heading
+      # Used for escaping obstacles or moving to better positions
       plugin: "nav2_behaviors/DriveOnHeading"  # Drive straight behavior
-      # Marcus: from 2.5 to 1.2
+      
+      # acceleration_limit: Maximum acceleration for forward driving (m/s²)
+      # Expected: 0.5-2.0 (should be safe and controlled)
+      # Impact: Higher values = faster acceleration but less controlled
+      # 1.0 m/s² provides controlled forward acceleration (reduced from 2.5 for safety)
       acceleration_limit: 1.0                  # Acceleration limit for straight driving
-      # Marcus: from 0.1 to 0.05
+      
+      # minimum_speed: Minimum speed for forward driving (m/s)
+      # Expected: 0.001-0.1 (very slow for precise control)
+      # Impact: Higher values = faster minimum speed but less precision
+      # 0.001 m/s allows very precise forward movements (reduced from 0.1 for precision)
       minimum_speed: 0.001                     # Minimum driving speed
+      
     wait:
+      # plugin: Wait/pause behavior implementation
+      # Expected: "nav2_behaviors/Wait" (standard wait behavior)
+      # Impact: Provides timed pausing capability for coordination
+      # Used for waiting for dynamic obstacles to clear
       plugin: "nav2_behaviors/Wait"            # Wait/pause behavior
+      
     assisted_teleop:
+      # plugin: Human-assisted teleoperation behavior
+      # Expected: "nav2_behaviors/AssistedTeleop" (human control interface)
+      # Impact: Allows human operator to take control during difficult situations
+      # Provides fallback when autonomous behaviors cannot resolve issues
       plugin: "nav2_behaviors/AssistedTeleop"  # Human-assisted control
+      
+    # ============================================================================
+    # BEHAVIOR FRAMEWORK PARAMETERS
+    # ============================================================================
+    # Global settings affecting all behaviors
+    
+    # global_frame: Global coordinate frame for behavior planning
+    # Expected: "map", "world" (standard ROS conventions)
+    # Impact: Must match other Nav2 components for consistent operation
+    # "map" frame standard for SLAM-based navigation
     global_frame: map                          # Global reference frame
+    
+    # robot_base_frame: Robot's base coordinate frame
+    # Expected: "base_link", "base_footprint" (must match robot URDF)
+    # Impact: Must match other Nav2 components and robot's TF tree
+    # base_footprint standard for ground-based mobile robots
     robot_base_frame: base_footprint           # Robot base frame
-    # Marcus changed from 0.1 to 2.0
+    
+    # use_sim_time: Whether to use simulation time
+    # Expected: true (simulation), false (real robot)
+    # Impact: Must be consistent across all Nav2 nodes
+    # false required for real robot operation
     use_sim_time: False                        # Real-time operation
+    
+    # simulate_ahead_time: Time horizon for behavior simulation/prediction (seconds)
+    # Expected: 1.0-5.0 (balance prediction accuracy with computation)
+    # Impact: Longer time = better prediction but more computation
+    # 2.0s provides good prediction horizon (increased from 0.1s for better planning)
     simulate_ahead_time: 2.0                   # Simulation lookahead time
-    # Marcus: changed from 1.0 to 0.5
+    
+    # ============================================================================
+    # ROTATIONAL BEHAVIOR LIMITS
+    # ============================================================================
+    # Global rotation limits affecting spin and other rotational behaviors
+    
+    # max_rotational_vel: Maximum rotational velocity for behaviors (rad/s)
+    # Expected: 0.5-3.0 (balance speed with safety)
+    # Impact: Higher values = faster rotation but less controlled
+    # 0.1 rad/s extremely conservative (Go2 capable of 1.5+ rad/s)
     max_rotational_vel: 0.1                    # Maximum rotational velocity - extremely conservative, Go2 can do 1.5+ rad/s
-    # Marcus: changed from 0.4 to 0.2
+    
+    # min_rotational_vel: Minimum rotational velocity for behaviors (rad/s)
+    # Expected: 0.05-0.5 (should be less than max_rotational_vel)
+    # Impact: Higher values = faster minimum rotation but less precision
+    # 0.1 rad/s matches max (creates fixed-speed rotation)
     min_rotational_vel: 0.1                    # Minimum rotational velocity - matches max (fixed speed)
-    # Marcus: changed from 3.2 to 1.0
+    
+    # rotational_acc_lim: Rotational acceleration limit for behaviors (rad/s²)
+    # Expected: 1.0-5.0 (should match robot's capabilities)
+    # Impact: Higher values = faster acceleration but less smooth
+    # 0.1 rad/s² very conservative (Go2 can handle 2.0+ rad/s²)
     rotational_acc_lim: 0.1                    # Rotational acceleration limit - very conservative, Go2 can handle 2.0+ rad/s²
+
+# ============================================================================
+# ROBOT STATE PUBLISHER CONFIGURATION
+# ============================================================================
+# Publishes robot's URDF transforms and joint states
+# Essential component for robot visualization and TF tree
 
 robot_state_publisher:
   ros__parameters:
+    # use_sim_time: Whether to use simulation time
+    # Expected: true (simulation), false (real robot)
+    # Impact: Must be consistent with other Nav2 components
+    # false required for real robot operation to maintain TF synchronization
     use_sim_time: False                        # Real-time operation for robot state
+
+# ============================================================================
+# WAYPOINT FOLLOWER CONFIGURATION
+# ============================================================================
+# Handles sequential navigation through multiple waypoints
+# Coordinates multi-goal missions and waypoint-specific tasks
 
 waypoint_follower:
   ros__parameters:
+    # use_sim_time: Whether to use simulation time
+    # Expected: true (simulation), false (real robot)
+    # Impact: Must be consistent with other Nav2 components
+    # false required for real robot operation
     use_sim_time: False                        # Real-time operation for waypoint following
+    
+    # loop_rate: Frequency for waypoint processing and coordination (Hz)
+    # Expected: 10-50Hz (balance responsiveness with CPU load)
+    # Impact: Higher frequency = more responsive waypoint coordination
+    # 20Hz provides good responsiveness for waypoint mission management
     loop_rate: 20                              # High frequency waypoint processing
+    
+    # action_server_result_timeout: Maximum time to wait for waypoint completion (seconds)
+    # Expected: 300-1800 seconds (depends on mission complexity and environment)
+    # Impact: Higher values = more patience for complex multi-waypoint missions
+    # 900s (15 minutes) accommodates complex patrol routes and recovery time
     action_server_result_timeout: 900.0        # Long timeout for complex waypoint missions
+    
+    # stop_on_failure: Whether to abort entire mission if one waypoint fails
+    # Expected: true/false
+    # Impact: true = stop mission on failure, false = continue to next waypoint
+    # false provides robust operation for patrol missions (skip unreachable waypoints)
     stop_on_failure: false                     # Continue to next waypoint on failure - good for autonomous patrol
+    
+    # waypoint_task_executor_plugin: Plugin to execute tasks at each waypoint
+    # Expected: Valid waypoint task plugin name
+    # Impact: Defines what action is performed when reaching each waypoint
+    # "wait_at_waypoint" provides basic pause functionality at waypoints
     waypoint_task_executor_plugin: "wait_at_waypoint"  # Task to execute at each waypoint
+    
+    # ============================================================================
+    # WAYPOINT TASK CONFIGURATION
+    # ============================================================================
+    # Specific behavior when robot reaches each waypoint
+    
     wait_at_waypoint:
+      # plugin: Waypoint task behavior implementation
+      # Expected: "nav2_waypoint_follower::WaitAtWaypoint" (standard wait behavior)
+      # Impact: Executes pause/wait action when waypoint is reached
+      # Can be replaced with custom task plugins for specific mission needs
       plugin: "nav2_waypoint_follower::WaitAtWaypoint"  # Wait behavior at waypoints
+      
+      # enabled: Whether waypoint tasks are executed
+      # Expected: true/false
+      # Impact: false = skip waypoint tasks (just pass through), true = execute tasks
+      # true enables waypoint-specific actions like pausing for inspections
       enabled: True                            # Enable waypoint waiting
+      
+      # waypoint_pause_duration: Duration to pause at each waypoint (milliseconds)
+      # Expected: 0-10000ms (depends on mission requirements)
+      # Impact: Longer duration = more time for inspections/tasks at waypoints
+      # 200ms very brief - consider 2000-5000ms for patrol inspection tasks
       waypoint_pause_duration: 200             # Very short pause - consider 2000-5000ms for patrol inspection tasks
 
-# Marcus: added velocity_smoother
+# ============================================================================
+# VELOCITY SMOOTHER CONFIGURATION
+# ============================================================================
+# Filters and limits velocity commands for smooth, safe robot motion
+# Prevents sudden acceleration changes and enforces robot dynamic limits
+
 velocity_smoother:
   ros__parameters:
+    # ============================================================================
+    # SMOOTHING BEHAVIOR
+    # ============================================================================
+    # Control how velocity commands are filtered and smoothed
+    
+    # smoothing_frequency: Frequency for velocity smoothing processing (Hz)
+    # Expected: 10-50Hz (balance smoothness with computational load)
+    # Impact: Higher frequency = smoother velocity transitions but more CPU
+    # 20.0Hz provides good smoothing responsiveness
     smoothing_frequency: 20.0                  # High frequency velocity smoothing
+    
+    # scale_velocities: Whether to scale all velocity components proportionally
+    # Expected: true/false
+    # Impact: true = maintain velocity ratios, false = limit each component independently
+    # false allows independent axis limiting for more flexible control
     scale_velocities: False                    # Don't scale velocities proportionally
+    
+    # feedback: Control loop type for velocity smoothing
+    # Expected: "OPEN_LOOP", "CLOSED_LOOP"
+    # Impact: OPEN_LOOP = no odometry feedback, CLOSED_LOOP = uses odometry
+    # OPEN_LOOP simpler and avoids potential feedback instabilities
     feedback: "OPEN_LOOP"                      # Open loop control (no odometry feedback)
+    
+    # ============================================================================
+    # VELOCITY LIMITS
+    # ============================================================================
+    # Maximum and minimum velocities in [x, y, theta] format
+    
+    # max_velocity: Maximum velocities [forward, lateral, angular]
+    # Expected: [0.3-2.0, 0.2-1.0, 1.0-4.0] (depends on robot capabilities)
+    # Impact: Higher values = faster robot motion but less safety margin
+    # [0.5, 0.5, 2.0] conservative for Go2 (can do [1.2, 0.8, 3.0])
     max_velocity: [0.5, 0.5, 2.0]              # Maximum velocities [x, y, theta] - Go2 can do [1.2, 0.8, 3.0] for faster operation
+    
+    # min_velocity: Minimum (reverse) velocities [backward, lateral, angular]
+    # Expected: Negative values with reasonable magnitudes
+    # Impact: More negative = greater reverse/counter-rotation capability
+    # [-0.5, -0.5, -2.0] provides symmetric reverse capability
     min_velocity: [-0.5, -0.5, -2.0]           # Minimum velocities (reverse capability)
+    
+    # ============================================================================
+    # ACCELERATION LIMITS
+    # ============================================================================
+    # Control rate of velocity changes for smooth motion
+    
+    # max_accel: Maximum accelerations [forward, lateral, angular]
+    # Expected: [0.2-2.0, 0.2-2.0, 1.0-5.0] (depends on robot and application)
+    # Impact: Higher values = faster acceleration but less smooth motion
+    # [0.3, 0.3, 3.2] provides smooth acceleration suitable for Go2
     max_accel: [0.3, 0.3, 3.2]                 # Maximum accelerations - smooth acceleration for Go2
+    
+    # max_decel: Maximum decelerations [forward, lateral, angular]
+    # Expected: Negative values with higher magnitude than max_accel
+    # Impact: More negative = faster stopping capability
+    # [-0.5, -0.5, -3.2] provides quick stopping for safety
     max_decel: [-0.5, -0.5, -3.2]              # Maximum decelerations - quick stopping capability
+    
+    # ============================================================================
+    # FEEDBACK AND TIMING PARAMETERS
+    # ============================================================================
+    # Control odometry feedback and command timing
+    
+    # odom_topic: ROS topic for odometry feedback (if using CLOSED_LOOP)
+    # Expected: Valid ROS topic name matching robot's odometry publisher
+    # Impact: Must match robot's odometry topic for feedback control
+    # Used for closed-loop control when feedback != "OPEN_LOOP"
     odom_topic: "odom"                         # Odometry topic for feedback
+    
+    # odom_duration: How long odometry messages remain valid (seconds)
+    # Expected: 0.05-0.2 (should be related to odometry publish rate)
+    # Impact: Longer duration = more tolerance for delayed odometry
+    # 0.1s appropriate for typical odometry rates (10-20Hz)
     odom_duration: 0.1                         # Odometry message validity duration
+    
+    # deadband_velocity: Velocity deadband [x, y, theta] to filter small commands
+    # Expected: [0.0-0.05, 0.0-0.05, 0.0-0.1] (small positive values or 0.0)
+    # Impact: Higher values = filter out smaller velocity commands
+    # [0.0, 0.0, 0.0] disables deadband filtering for full responsiveness
     deadband_velocity: [0.0, 0.0, 0.0]         # Velocity deadband (no filtering)
+    
+    # velocity_timeout: Timeout for incoming velocity commands (seconds)
+    # Expected: 0.5-2.0 (balance responsiveness with safety)
+    # Impact: Higher values = more tolerance for delayed commands
+    # 1.0s provides reasonable timeout for command streams
     velocity_timeout: 1.0                      # Timeout for velocity commands
 
-# # Marcus: added collision_monitor
+# ============================================================================
+# COLLISION MONITOR CONFIGURATION (CURRENTLY DISABLED)
+# ============================================================================
+# Real-time collision detection and avoidance system for immediate safety
+# Monitors sensor data and can stop/slow robot to prevent collisions
+# NOTE: Currently commented out - would provide additional safety layer
+
 # collision_monitor:
 #   ros__parameters:
+#     # ============================================================================
+#     # COORDINATE FRAMES
+#     # ============================================================================
+#     # Frame definitions for collision detection coordinate system
+#     
+#     # base_frame_id: Robot base frame for collision calculations
+#     # Expected: "base_link", "base_footprint" (must match robot URDF)
+#     # Impact: Must match other Nav2 components for consistent collision detection
+#     # base_footprint standard for ground-based collision detection
 #     base_frame_id: "base_footprint"            # Robot base frame for collision detection
+#     
+#     # odom_frame_id: Odometry frame for velocity prediction
+#     # Expected: "odom" (standard ROS convention)
+#     # Impact: Used for predicting robot motion in collision detection
+#     # Must match robot's odometry frame
 #     odom_frame_id: "odom"                      # Odometry frame reference
+#     
+#     # ============================================================================
+#     # VELOCITY COMMAND PIPELINE
+#     # ============================================================================
+#     # Input/output topics for velocity command monitoring
+#     
+#     # cmd_vel_in_topic: Input velocity commands (before collision checking)
+#     # Expected: Valid ROS topic name from controller/smoother
+#     # Impact: Must match velocity command source for monitoring
+#     # "cmd_vel_smoothed" indicates post-smoothing velocity commands
 #     cmd_vel_in_topic: "cmd_vel_smoothed"       # Input velocity commands (post-smoothing)
+#     
+#     # cmd_vel_out_topic: Output velocity commands (after collision checking)
+#     # Expected: Valid ROS topic name to robot's velocity controller
+#     # Impact: Must match robot's velocity input topic
+#     # Final velocity commands sent to robot after safety checking
 #     cmd_vel_out_topic: "cmd_vel"               # Output velocity commands (post-monitoring)
+#     
+#     # state_topic: Topic for publishing collision monitor status
+#     # Expected: Valid ROS topic name for status information
+#     # Impact: Provides monitoring state for debugging and system health
+#     # Used for diagnostics and system status monitoring
 #     state_topic: "collision_monitor_state"     # Monitor state topic
+#     
+#     # ============================================================================
+#     # TIMING AND SYNCHRONIZATION
+#     # ============================================================================
+#     # Parameters controlling timing behavior and sensor synchronization
+#     
+#     # transform_tolerance: Transform synchronization tolerance (seconds)
+#     # Expected: 0.1-1.0 (should be tight for safety-critical operations)
+#     # Impact: Lower values = stricter timing requirements for collision detection
+#     # 0.6s accommodates WebRTC latency while maintaining safety
 #     transform_tolerance: 0.6                   # Tight transform tolerance for safety
+#     
+#     # source_timeout: Timeout for sensor data (seconds)
+#     # Expected: 0.5-2.0 (balance safety with sensor reliability)
+#     # Impact: Lower values = stop robot sooner when sensors fail
+#     # 1.0s provides reasonable sensor timeout for safety
 #     source_timeout: 1.0                        # Sensor data timeout
+#     
+#     # base_shift_correction: Correct for base frame coordinate shifts
+#     # Expected: true/false
+#     # Impact: true = handle dynamic base frame changes, false = assume static
+#     # true provides robustness for robots with moving sensor mounts
 #     base_shift_correction: True                # Correct for base frame shifts
+#     
+#     # stop_pub_timeout: Timeout for publishing stop commands (seconds)
+#     # Expected: 1.0-5.0 (balance safety with system responsiveness)
+#     # Impact: Higher values = longer emergency stop duration
+#     # 2.0s ensures robot stays stopped long enough for obstacle clearance
 #     stop_pub_timeout: 2.0                      # Timeout for stop commands
+#     
+#     # ============================================================================
+#     # COLLISION DETECTION POLYGONS
+#     # ============================================================================
+#     # Define geometric areas around robot for collision detection
+#     
+#     # polygons: List of active collision detection zones
+#     # Expected: Array of polygon names (configured below)
+#     # Impact: Each polygon provides different collision behaviors
+#     # "FootprintApproach" creates approach-slowing zone around robot
 #     polygons: ["FootprintApproach"]            # Active collision detection polygons
+#     
 #     FootprintApproach:
+#       # type: Collision detection geometry type
+#       # Expected: "polygon", "circle" (geometric shape for detection)
+#       # Impact: "polygon" allows complex shapes, "circle" is simpler
+#       # "polygon" provides accurate robot shape representation
 #       type: "polygon"                          # Polygon-based collision detection
+#       
+#       # action_type: Action to take when collision detected
+#       # Expected: "stop", "slowdown", "approach", "none"
+#       # Impact: "approach" = gradual slowdown, "stop" = immediate halt
+#       # "approach" provides smoother behavior than hard stops
 #       action_type: "approach"                  # Slow down when approaching obstacles
+#       
+#       # footprint_topic: Topic providing robot footprint data
+#       # Expected: Valid ROS topic name for footprint information
+#       # Impact: Must match costmap footprint publisher for accurate shape
+#       # Uses local costmap footprint for dynamic robot dimensions
 #       footprint_topic: "/local_costmap/published_footprint"  # Robot footprint source
+#       
+#       # time_before_collision: Prediction time horizon (seconds)
+#       # Expected: 0.5-2.0 (balance safety with responsiveness)
+#       # Impact: Longer time = more conservative collision avoidance
+#       # 1.1s accounts for WebRTC latency plus safety margin
 #       time_before_collision: 1.1               # Time horizon for collision prediction - accounts for WebRTC latency
+#       
+#       # simulation_time_step: Time resolution for collision simulation (seconds)
+#       # Expected: 0.05-0.2 (balance accuracy with computation)
+#       # Impact: Smaller steps = more accurate prediction but more computation
+#       # 0.1s provides good balance for collision prediction accuracy
 #       simulation_time_step: 0.1                # Time step for collision simulation
+#       
+#       # min_points: Minimum points required for valid polygon
+#       # Expected: 3-10 (depends on polygon complexity)
+#       # Impact: Higher values = require more detailed polygon definition
+#       # 6 points provides reasonable polygon detail for robot footprint
 #       min_points: 6                            # Minimum points for polygon validity
+#       
+#       # visualize: Enable collision zone visualization in RViz
+#       # Expected: true/false
+#       # Impact: true = helpful for debugging but uses more bandwidth
+#       # true recommended for development and tuning
 #       visualize: True                          # Enable visualization in RViz
+#       
+#       # enabled: Whether this collision polygon is active
+#       # Expected: true/false
+#       # Impact: false = this polygon ignored completely
+#       # true enables this collision detection zone
 #       enabled: True                            # Enable this collision polygon
+#       
+#     # ============================================================================
+#     # SENSOR SOURCES FOR COLLISION DETECTION
+#     # ============================================================================
+#     # Configure which sensors provide collision detection data
+#     
+#     # observation_sources: List of sensor sources for collision detection
+#     # Expected: Array of sensor source names (configured below)
+#     # Impact: Each source provides different collision detection capabilities
+#     # "scan" uses laser scan data for obstacle detection
 #     observation_sources: ["scan"]              # Sensor sources for collision detection
+#     
 #     scan:
+#       # type: Sensor type for collision detection
+#       # Expected: "scan", "pointcloud", "range"
+#       # Impact: Determines how sensor data is processed for collision detection
+#       # "scan" for standard 2D laser scan processing
 #       type: "scan"                             # Laser scan sensor type
+#       
+#       # topic: ROS topic for sensor data
+#       # Expected: Valid ROS topic name matching sensor publisher
+#       # Impact: Must match actual sensor topic for collision detection
+#       # "scan_restamped" provides timestamp-corrected laser data
 #       topic: "scan_restamped"                  # Restamped laser scan topic
+#       
+#       # min_height: Minimum height to consider for collision (meters)
+#       # Expected: 0.0-0.5 (depends on what robot should avoid)
+#       # Impact: Higher values = ignore low obstacles
+#       # 0.15m considers obstacles above typical floor irregularities
 #       min_height: 0.15                         # Minimum height for collision detection
+#       
+#       # max_height: Maximum height to consider for collision (meters)
+#       # Expected: 1.0-3.0 (depends on robot and environment)
+#       # Impact: Higher values = consider taller obstacles
+#       # 2.0m handles typical indoor obstacle heights
 #       max_height: 2.0                          # Maximum height for collision detection
+#       
+#       # enabled: Whether this sensor source is active
+#       # Expected: true/false
+#       # Impact: false = this sensor ignored for collision detection
+#       # true enables laser scan collision monitoring
 #       enabled: True                            # Enable laser scan collision detection
