@@ -314,8 +314,10 @@ local_costmap:
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer" # Obstacle inflation for safety margin
-        cost_scaling_factor: 5.0                 # Aggressive cost scaling around obstacles
-        inflation_radius: 0.45                   # Large safety margin - conservative for Go2
+        # cost_scaling_factor: 5.0                 # Aggressive cost scaling around obstacles
+        # inflation_radius: 0.45                   # Large safety margin - conservative for Go2
+        cost_scaling_factor: 2.5                  # Reduce from 5.0
+        inflation_radius: 0.25                   # Reduce from 0.45
 
 global_costmap:
   global_costmap:
@@ -373,9 +375,11 @@ global_costmap:
           max_obstacle_height: 0.5               # Maximum obstacle height
 
       inflation_layer:
-        plugin: "nav2_costmap_2d::InflationLayer" # Obstacle inflation layer
-        cost_scaling_factor: 4.0                  # Strong cost scaling around obstacles
-        inflation_radius: 0.45                    # Large safety margin
+          plugin: "nav2_costmap_2d::InflationLayer" # Obstacle inflation layer
+          # cost_scaling_factor: 4.0                  # Strong cost scaling around obstacles
+          # inflation_radius: 0.45                    # Large safety margin
+          cost_scaling_factor: 2.0                  # Reduce from 4.0
+          inflation_radius: 0.25                   # Reduce from 0.45
 
 map_saver:
   ros__parameters:
