@@ -1,11 +1,11 @@
 amcl:
   ros__parameters:
     use_sim_time: False                             # Use wall clock time for real robot operation
-    alpha1: 0.2                                     # Odometry rotation noise from rotation - Go2's rotation accuracy
-    alpha2: 0.2                                     # Odometry rotation noise from translation - wheel slip estimation
-    alpha3: 0.2                                     # Odometry translation noise from translation - Go2's linear accuracy
-    alpha4: 0.2                                     # Odometry translation noise from rotation - turning accuracy
-    alpha5: 0.2                                     # Translation noise - additional noise for omnidirectional motion
+    alpha1: 0.4                                     # Odometry rotation noise from rotation - Go2's rotation accuracy
+    alpha2: 0.4                                     # Odometry rotation noise from translation - wheel slip estimation
+    alpha3: 0.4                                     # Odometry translation noise from translation - Go2's linear accuracy
+    alpha4: 0.4                                     # Odometry translation noise from rotation - turning accuracy
+    alpha5: 0.4                                     # Translation noise - additional noise for omnidirectional motion
     base_frame_id: "base_footprint"                 # Robot's ground projection frame - standard for mobile robots
     beam_skip_distance: 0.5                         # Skip beams closer than this to reduce computational load
     beam_skip_error_threshold: 0.9                  # Error threshold for skipping beams - quality control
