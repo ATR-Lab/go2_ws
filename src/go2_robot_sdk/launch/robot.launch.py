@@ -155,14 +155,14 @@ class Go2NodeFactory:
                     ('scan', f'{namespace}/scan'),
                 ],
                 parameters=[{
-                    'target_frame': f'{namespace}/base_footprint',
-                    'max_height': 1.5,
-                    'min_height': -0.5,
-                    'angle_min': -1.5708,
-                    'angle_max': 1.5708,
-                    'angle_increment': 0.0174533,
-                    'range_min': 0.1,
-                    'range_max': 20.0
+                    'target_frame': f'{namespace}/base_link',  # Use base_link to avoid transform timing issues with restamper
+                    'max_height': 0.8,                         # 96° vertical FOV at reasonable distance (~0.8m at 1m range)
+                    'min_height': 0.05,                        # Matches radar's near blind spot specification
+                    'angle_min': -0.5236,                      # ±30° angular range (narrower than 96° FOV for reliability)
+                    'angle_max': 0.5236,                       # ±30° angular range - focused on most reliable sensor data
+                    'angle_increment': 0.0349,                 # 2° resolution - appropriate for radar data processing
+                    'range_min': 0.05,                         # Matches radar's near blind spot specification
+                    'range_max': 30.0                          # Matches radar's maximum 30m range capability
                 }],
                 output='screen',
             )
@@ -177,14 +177,14 @@ class Go2NodeFactory:
                     ('scan', 'scan'),
                 ],
                 parameters=[{
-                    'target_frame': 'base_footprint',
-                    'max_height': 1.5,
-                    'min_height': -0.5,
-                    'angle_min': -1.5708,
-                    'angle_max': 1.5708,
-                    'angle_increment': 0.0174533,
-                    'range_min': 0.1,
-                    'range_max': 20.0
+                    'target_frame': 'base_link',                # Use base_link to avoid transform timing issues with restamper
+                    'max_height': 0.8,                          # 96° vertical FOV at reasonable distance (~0.8m at 1m range)
+                    'min_height': 0.05,                         # Matches radar's near blind spot specification
+                    'angle_min': -0.5236,                       # ±30° angular range (narrower than 96° FOV for reliability)
+                    'angle_max': 0.5236,                        # ±30° angular range - focused on most reliable sensor data
+                    'angle_increment': 0.0349,                  # 2° resolution - appropriate for radar data processing
+                    'range_min': 0.05,                          # Matches radar's near blind spot specification
+                    'range_max': 30.0                           # Matches radar's maximum 30m range capability
                 }],
                 output='screen',
             )
