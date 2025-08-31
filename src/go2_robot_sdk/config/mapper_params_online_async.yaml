@@ -1,74 +1,358 @@
 slam_toolbox:
   ros__parameters:
 
-    # Plugin params
+    # ============================================================================
+    # OPTIMIZATION PLUGIN PARAMETERS
+    # ============================================================================
+    # These parameters configure the underlying optimization engine used for SLAM
+    
+    # solver_plugin: Specifies which optimization backend to use for pose graph optimization
+    # Options: solver_plugins::CeresSolver (Google's Ceres), solver_plugins::SpaSolver (SPA), solver_plugins::G2oSolver (g2o)
+    # Impact: CeresSolver is most robust and feature-rich, provides better convergence for complex environments
+    # G2oSolver is faster but less stable, SpaSolver is lightweight but limited functionality
     solver_plugin: solver_plugins::CeresSolver
+    
+    # ceres_linear_solver: Algorithm for solving linear systems within Ceres optimization
+    # Options: SPARSE_NORMAL_CHOLESKY, DENSE_QR, DENSE_NORMAL_CHOLESKY, SPARSE_SCHUR, DENSE_SCHUR, ITERATIVE_SCHUR
+    # Impact: SPARSE_NORMAL_CHOLESKY is memory efficient for large maps, good balance of speed/memory
+    # DENSE_QR is slower but more numerically stable, SPARSE_SCHUR is faster for smaller problems
     ceres_linear_solver: SPARSE_NORMAL_CHOLESKY
+    
+    # ceres_preconditioner: Preconditioning strategy to improve convergence speed
+    # Options: IDENTITY, JACOBI, SCHUR_JACOBI, CLUSTER_JACOBI, CLUSTER_TRIDIAGONAL
+    # Impact: SCHUR_JACOBI provides good convergence for SLAM problems with moderate computational cost
+    # IDENTITY is fastest but may converge slowly, JACOBI is more robust but slower
     ceres_preconditioner: SCHUR_JACOBI
+    
+    # ceres_trust_strategy: Strategy for trust region optimization (how step size is controlled)
+    # Options: LEVENBERG_MARQUARDT, DOGLEG
+    # Impact: LEVENBERG_MARQUARDT is more robust and stable, especially for poorly conditioned problems
+    # DOGLEG can be faster when problem is well-conditioned but may fail on difficult optimizations
     ceres_trust_strategy: LEVENBERG_MARQUARDT
+    
+    # ceres_dogleg_type: Sub-strategy when using DOGLEG trust strategy
+    # Options: TRADITIONAL_DOGLEG, SUBSPACE_DOGLEG
+    # Impact: TRADITIONAL_DOGLEG is standard approach, SUBSPACE_DOGLEG can be more efficient for large problems
+    # Only used when ceres_trust_strategy is DOGLEG
     ceres_dogleg_type: TRADITIONAL_DOGLEG
+    
+    # ceres_loss_function: Robust loss function to handle outliers in sensor data
+    # Options: None, HUBER_LOSS, SOFT_L_ONE_LOSS, CAUCHY_LOSS, ARCTAN_LOSS
+    # Impact: None uses standard L2 loss (sensitive to outliers), HUBER_LOSS reduces outlier influence
+    # CAUCHY_LOSS heavily suppresses outliers but may be too aggressive, can affect map quality
     ceres_loss_function: None
 
-    # ROS Parameters
+    # ============================================================================
+    # ROS FRAMEWORK PARAMETERS
+    # ============================================================================
+    # These parameters configure ROS topics, frames, and operational modes
+    
+    # odom_frame: TF frame name for odometry data (robot's estimated pose from wheel encoders/IMU)
+    # Expected: Standard ROS naming convention (odom, robot_odom)
+    # Impact: Must match your robot's TF tree. Wrong name causes TF lookup failures and SLAM failure
+    # If changed: Update robot's TF publisher to use matching frame name
     odom_frame: odom
+    
+    # map_frame: TF frame name for the global map coordinate system
+    # Expected: Standard ROS naming convention (map, world)
+    # Impact: All map data referenced to this frame. Wrong name breaks navigation stack integration
+    # If changed: Update navigation stack configuration to use matching frame name
     map_frame: map
+    
+    # base_frame: TF frame name for robot's physical base/center
+    # Expected: Standard ROS naming convention (base_link, base_footprint)
+    # Impact: Must match robot URDF. Wrong name causes TF chain breaks and localization failure
+    # base_footprint projects robot center to ground, base_link is robot's physical center
     base_frame: base_footprint
+    
+    # scan_topic: ROS topic name where laser scan data is published
+    # Expected: Valid ROS topic name (e.g., /scan, /laser_scan, /scan_restamped)
+    # Impact: Must match your lidar publisher topic. Wrong topic = no sensor data = no mapping
+    # /scan_restamped indicates timestamp correction is applied for better synchronization
     scan_topic: /scan_restamped
+    
+    # use_map_saver: Whether to automatically save maps during operation
+    # Expected: true/false
+    # Impact: true = continuous map saving (safer, uses disk space), false = manual save only
+    # Setting to false improves performance but risks losing maps if system crashes
     use_map_saver: true
+    
+    # mode: SLAM operation mode
+    # Options: "mapping" (build new map), "localization" (localize in existing map)
+    # Impact: "mapping" creates new maps but is computationally expensive
+    # "localization" is faster, uses less resources, but needs existing map
     mode: mapping
 
-    # if you'd like to immediately start continuing a map at a given pose
-    # or at the dock, but they are mutually exclusive, if pose is given
-    # will use pose
+    # map_start_pose: [x, y, theta] - Initial pose when continuing existing map (meters, radians)
+    # Expected: [float, float, float] coordinates in map frame
+    # Impact: Helps SLAM initialize in correct location when resuming mapping
+    # Commented out = automatic initialization, uncomment for manual pose
     # map_start_pose: [0.0, 0.0, 0.0]
+    
+    # map_start_at_dock: Whether to start mapping from docking station position
+    # Expected: true/false
+    # Impact: true = uses dock as origin (consistent start point), false = uses current position
+    # Mutually exclusive with map_start_pose - pose takes precedence if both set
     map_start_at_dock: true
 
+    # ============================================================================
+    # MAPPING BEHAVIOR & PERFORMANCE PARAMETERS
+    # ============================================================================
+    # These parameters control mapping performance, timing, and resource usage
+    
+    # debug_logging: Enable verbose debug output for troubleshooting
+    # Expected: true/false
+    # Impact: true = detailed logs (helps debugging, impacts performance), false = normal logging
+    # Set to true when troubleshooting SLAM issues, false for production use
     debug_logging: false
+    
+    # throttle_scans: Process every Nth scan (1 = process all scans)
+    # Expected: Integer >= 1 (1, 2, 3, etc.)
+    # Impact: Higher values = faster processing but lower map quality and localization accuracy
+    # 1 = process all scans (best quality), 2 = every other scan (faster), etc.
     throttle_scans: 1
+    
+    # transform_publish_period: How often to publish map->odom transform (seconds)
+    # Expected: Float > 0.0 (typically 0.01-0.1), or 0 to disable
+    # Impact: Lower values = smoother navigation but higher CPU load
+    # 0.02 (50Hz) is good balance, 0.01 (100Hz) for high-speed robots, 0 disables publishing
     transform_publish_period: 0.02 # if 0 never publishes odometry
+    
+    # map_update_interval: How often to update/save the map (seconds)
+    # Expected: Float > 0.0 (typically 1.0-10.0)
+    # Impact: Lower values = more frequent saves (safer) but higher I/O load
+    # 5.0 seconds balances safety with performance, 1.0 for critical applications
     map_update_interval: 5.0
+    
+    # resolution: Map resolution in meters per pixel
+    # Expected: Float 0.01-0.1 (typically 0.05)
+    # Impact: Lower values = higher detail but larger memory/storage needs
+    # 0.05m (5cm/pixel) is standard, 0.02m for detailed maps, 0.1m for large areas
     resolution: 0.05
+    
+    # max_laser_range: Maximum laser range to use for mapping (meters)
+    # Expected: Float matching your lidar's range (typically 10.0-30.0)
+    # Impact: Higher values = larger mapping area but more noise and computational load
+    # Should be <= your lidar's actual max range, 20.0m is common for indoor robots
     max_laser_range: 20.0 # for rastering images
+    
+    # minimum_time_interval: Minimum time between processing scans (seconds)
+    # Expected: Float 0.1-1.0
+    # Impact: Higher values = less frequent updates (faster) but potentially less accurate tracking
+    # 0.5s prevents excessive processing during slow movement, lower for fast robots
     minimum_time_interval: 0.5
+    
+    # transform_timeout: Timeout for TF lookups (seconds)
+    # Expected: Float 0.1-1.0
+    # Impact: Lower values = faster failure detection but may miss delayed transforms
+    # 0.2s typical for good networks, increase for slower systems or wireless
     transform_timeout: 0.2
+    
+    # tf_buffer_duration: How long to keep TF history (seconds)
+    # Expected: Float 10.0-60.0
+    # Impact: Longer duration = more memory but better handling of delayed data
+    # 30s handles most sensor delays, increase for systems with large time variations
     tf_buffer_duration: 30.0
+    
+    # stack_size_to_use: Stack size for SLAM threads (bytes)
+    # Expected: Large integer (millions of bytes)
+    # Impact: Larger values handle bigger maps but use more memory
+    # 40MB handles large indoor environments, increase for huge maps
     stack_size_to_use: 40000000 # program needs a larger stack size to serialize large maps
+    
+    # enable_interactive_mode: Allow interactive map editing and commands
+    # Expected: true/false
+    # Impact: true = enables RViz plugins and interactive features (uses more resources)
+    # false = autonomous operation only (better performance for production)
     enable_interactive_mode: true
 
-    # General Parameters
+    # ============================================================================
+    # SCAN MATCHING & LOOP CLOSURE PARAMETERS
+    # ============================================================================
+    # These parameters control scan matching algorithms and loop closure detection
+    
+    # use_scan_matching: Enable scan-to-scan matching for pose estimation
+    # Expected: true/false
+    # Impact: true = better pose tracking (essential for SLAM), false = relies only on odometry
+    # Should always be true for SLAM; false only for debugging or odometry-only systems
     use_scan_matching: true
+    
+    # use_scan_barycenter: Use geometric center of scan for matching initialization
+    # Expected: true/false
+    # Impact: true = more robust initialization (recommended), false = uses scan origin
+    # Helps with scan matching convergence, especially in symmetric environments
     use_scan_barycenter: true
-    # minimum_travel_distance: 0.5
+    
+    # minimum_travel_distance: Minimum distance robot must travel before processing new scan (meters)
+    # Expected: Float 0.1-1.0
+    # Impact: Lower values = more frequent updates (better tracking, higher CPU)
+    # Higher values = less frequent updates (faster processing, may lose tracking)
+    # 0.2m allows more frequent updates for better quality, 0.5m is more conservative
+    # minimum_travel_distance: 0.5  # Conservative default
     minimum_travel_distance: 0.2 # Allow for more frequent updates
+    
+    # minimum_travel_heading: Minimum rotation before processing new scan (radians)
+    # Expected: Float 0.1-1.0 (roughly 6-57 degrees)
+    # Impact: Lower values = more updates during rotation (better angular tracking)
+    # 0.5 radians (~29 degrees) balances update frequency with performance
     minimum_travel_heading: 0.5
+    
+    # scan_buffer_size: Number of recent scans to keep in memory for matching
+    # Expected: Integer 5-20
+    # Impact: Larger buffer = more scan history for matching but uses more memory
+    # 10 scans typically provides good matching without excessive memory usage
     scan_buffer_size: 10
+    
+    # scan_buffer_maximum_scan_distance: Max distance between scans in buffer (meters)
+    # Expected: Float 5.0-20.0
+    # Impact: Larger values = keep scans from further away (better for loop closure)
+    # 10.0m handles most indoor environments, increase for large spaces
     scan_buffer_maximum_scan_distance: 10.0
-    link_match_minimum_response_fine: 0.1  
+    
+    # link_match_minimum_response_fine: Quality threshold for fine scan matching
+    # Expected: Float 0.05-0.3
+    # Impact: Lower values = accept more matches (less strict, may include poor matches)
+    # Higher values = reject poor matches (more strict, better quality)
+    # 0.1 is moderately strict, good for most environments
+    link_match_minimum_response_fine: 0.1
+    
+    # link_scan_maximum_distance: Maximum distance for linking consecutive scans (meters)
+    # Expected: Float 1.0-3.0
+    # Impact: Larger values = can link scans further apart (handles gaps)
+    # 1.5m works well for typical robot speeds and environments
     link_scan_maximum_distance: 1.5
+    
+    # loop_search_maximum_distance: Maximum distance to search for loop closures (meters)
+    # Expected: Float 2.0-10.0
+    # Impact: Larger values = can find loops over greater distances (but slower)
+    # 3.0m finds most reasonable loops without excessive computation
     loop_search_maximum_distance: 3.0
-    do_loop_closing: true 
-    loop_match_minimum_chain_size: 10           
-    loop_match_maximum_variance_coarse: 3.0  
-    loop_match_minimum_response_coarse: 0.35    
+    
+    # do_loop_closing: Enable loop closure detection and correction
+    # Expected: true/false
+    # Impact: true = corrects accumulated drift (essential for large maps), false = faster but drift accumulates
+    # Should be true for any mapping beyond small areas
+    do_loop_closing: true
+    
+    # loop_match_minimum_chain_size: Minimum number of consecutive loop closure candidates
+    # Expected: Integer 5-20
+    # Impact: Higher values = more confident loop closures (less false positives)
+    # 10 provides good balance between confidence and responsiveness
+    loop_match_minimum_chain_size: 10
+    
+    # loop_match_maximum_variance_coarse: Maximum pose variance for coarse loop matching
+    # Expected: Float 1.0-5.0
+    # Impact: Higher values = accept less certain matches (more permissive)
+    # 3.0 allows reasonable uncertainty while rejecting clearly wrong matches
+    loop_match_maximum_variance_coarse: 3.0
+    
+    # loop_match_minimum_response_coarse: Quality threshold for coarse loop matching
+    # Expected: Float 0.2-0.5
+    # Impact: Higher values = stricter loop closure detection (fewer false positives)
+    # 0.35 provides conservative loop detection, increase to 0.4-0.5 for stricter
+    loop_match_minimum_response_coarse: 0.35
+    
+    # loop_match_minimum_response_fine: Quality threshold for fine loop matching
+    # Expected: Float 0.3-0.7
+    # Impact: Higher values = very strict loop closure (fewer false positives, may miss valid loops)
+    # 0.45 is moderately strict, good for most environments
     loop_match_minimum_response_fine: 0.45
 
-    # Correlation Parameters - Correlation Parameters
+    # ============================================================================
+    # CORRELATION & SEARCH SPACE PARAMETERS
+    # ============================================================================
+    # These parameters control scan correlation algorithms and search strategies
+    
+    # correlation_search_space_dimension: Search area size for scan correlation (meters)
+    # Expected: Float 0.3-1.0
+    # Impact: Larger values = wider search area (handles larger odometry errors) but slower
+    # 0.5m handles typical odometry drift, increase to 0.8-1.0 for poor odometry
     correlation_search_space_dimension: 0.5
+    
+    # correlation_search_space_resolution: Resolution of correlation search grid (meters)
+    # Expected: Float 0.005-0.02 (should be finer than map resolution)
+    # Impact: Finer resolution = more accurate matching but slower computation
+    # 0.01m (1cm) provides good accuracy, 0.005m for high precision, 0.02m for speed
     correlation_search_space_resolution: 0.01
-    correlation_search_space_smear_deviation: 0.1 
+    
+    # correlation_search_space_smear_deviation: Gaussian smoothing for correlation surface
+    # Expected: Float 0.05-0.2
+    # Impact: Higher values = smoother correlation surface (more robust) but less precise
+    # 0.1 provides good balance between robustness and precision
+    correlation_search_space_smear_deviation: 0.1
 
-    # Correlation Parameters - Loop Closure Parameters
+    # ============================================================================
+    # LOOP CLOSURE SEARCH PARAMETERS
+    # ============================================================================
+    # Specialized correlation parameters for loop closure detection
+    
+    # loop_search_space_dimension: Search area size for loop closure matching (meters)
+    # Expected: Float 5.0-15.0
+    # Impact: Larger values = can find loops with more pose uncertainty but much slower
+    # 8.0m handles most indoor loop closures with reasonable computational cost
     loop_search_space_dimension: 8.0
+    
+    # loop_search_space_resolution: Resolution for loop closure search grid (meters)
+    # Expected: Float 0.02-0.1
+    # Impact: Finer resolution = more accurate loop closure but slower computation
+    # 0.05m balances accuracy with performance for loop closure searches
     loop_search_space_resolution: 0.05
+    
+    # loop_search_space_smear_deviation: Smoothing for loop closure correlation
+    # Expected: Float 0.01-0.05
+    # Impact: Lower values = more precise matching, higher values = more robust
+    # 0.03 provides good precision for loop closure without excessive smoothing
     loop_search_space_smear_deviation: 0.03
 
-    # Scan Matcher Parameters
-    distance_variance_penalty: 0.5      
-    angle_variance_penalty: 1.0    
+    # ============================================================================
+    # SCAN MATCHER OPTIMIZATION PARAMETERS
+    # ============================================================================
+    # Parameters controlling scan matching optimization and penalties
+    
+    # distance_variance_penalty: Penalty weight for translational uncertainty
+    # Expected: Float 0.1-2.0
+    # Impact: Higher values = penalize uncertain translations more (prefer rotation matches)
+    # 0.5 provides balanced weighting between translation and rotation matching
+    distance_variance_penalty: 0.5
+    
+    # angle_variance_penalty: Penalty weight for rotational uncertainty
+    # Expected: Float 0.5-3.0
+    # Impact: Higher values = penalize uncertain rotations more (prefer translation matches)
+    # 1.0 gives rotation uncertainty equal weight to translation uncertainty
+    angle_variance_penalty: 1.0
 
-    fine_search_angle_offset: 0.00349     
-    coarse_search_angle_offset: 0.349   
-    coarse_angle_resolution: 0.0349        
+    # fine_search_angle_offset: Angular step size for fine scan matching (radians)
+    # Expected: Float 0.001-0.01 (roughly 0.06-0.6 degrees)
+    # Impact: Smaller values = more precise angular matching but slower computation
+    # 0.00349 (~0.2 degrees) provides good angular precision for fine matching
+    fine_search_angle_offset: 0.00349
+    
+    # coarse_search_angle_offset: Angular step size for coarse scan matching (radians)
+    # Expected: Float 0.1-0.5 (roughly 6-29 degrees)
+    # Impact: Smaller values = finer angular search but slower initial matching
+    # 0.349 (~20 degrees) provides reasonable coarse search coverage
+    coarse_search_angle_offset: 0.349
+    
+    # coarse_angle_resolution: Angular resolution for coarse matching (radians)
+    # Expected: Float 0.01-0.1 (roughly 0.6-6 degrees)
+    # Impact: Finer resolution = more thorough coarse search but slower
+    # 0.0349 (~2 degrees) balances thoroughness with speed for coarse matching
+    coarse_angle_resolution: 0.0349
+    
+    # minimum_angle_penalty: Minimum penalty for angular misalignment
+    # Expected: Float 0.5-1.0
+    # Impact: Higher values = stricter angular matching requirements
+    # 0.9 requires very good angular alignment before accepting a match
     minimum_angle_penalty: 0.9
+    
+    # minimum_distance_penalty: Minimum penalty for translational misalignment
+    # Expected: Float 0.3-0.8
+    # Impact: Higher values = stricter translational matching requirements
+    # 0.5 requires moderate translational alignment before accepting a match
     minimum_distance_penalty: 0.5
+    
+    # use_response_expansion: Enable correlation response expansion technique
+    # Expected: true/false
+    # Impact: true = better matching in feature-poor environments (more robust)
+    # false = faster processing but may fail in corridors or open spaces
     use_response_expansion: true
