@@ -407,7 +407,7 @@ planner_server:
     # expected_planner_frequency: 2.0             # Conservative for external computer - could increase to 3-5Hz for better replanning
     # expected_planner_frequency: 3.0             # Conservative for external computer - could increase to 3-5Hz for better replanning
     # expected_planner_frequency: 5.0             # Increased for faster replanning
-    expected_planner_frequency: 8.0             # Increased for faster replanning
+    expected_planner_frequency: 5.0             # Increased for faster replanning
     planner_plugins: ["GridBased"]              # Available planning algorithms
     tf_buffer_duration: 50.0                    # Large TF buffer for timing robustness
     transform_tolerance: 0.6                    # Transform synchronization tolerance
@@ -494,32 +494,32 @@ velocity_smoother:
     deadband_velocity: [0.0, 0.0, 0.0]         # Velocity deadband (no filtering)
     velocity_timeout: 1.0                      # Timeout for velocity commands
 
-# Marcus: added collision_monitor
-collision_monitor:
-  ros__parameters:
-    base_frame_id: "base_footprint"            # Robot base frame for collision detection
-    odom_frame_id: "odom"                      # Odometry frame reference
-    cmd_vel_in_topic: "cmd_vel_smoothed"       # Input velocity commands (post-smoothing)
-    cmd_vel_out_topic: "cmd_vel"               # Output velocity commands (post-monitoring)
-    state_topic: "collision_monitor_state"     # Monitor state topic
-    transform_tolerance: 0.6                   # Tight transform tolerance for safety
-    source_timeout: 1.0                        # Sensor data timeout
-    base_shift_correction: True                # Correct for base frame shifts
-    stop_pub_timeout: 2.0                      # Timeout for stop commands
-    polygons: ["FootprintApproach"]            # Active collision detection polygons
-    FootprintApproach:
-      type: "polygon"                          # Polygon-based collision detection
-      action_type: "approach"                  # Slow down when approaching obstacles
-      footprint_topic: "/local_costmap/published_footprint"  # Robot footprint source
-      time_before_collision: 1.1               # Time horizon for collision prediction - accounts for WebRTC latency
-      simulation_time_step: 0.1                # Time step for collision simulation
-      min_points: 6                            # Minimum points for polygon validity
-      visualize: True                          # Enable visualization in RViz
-      enabled: True                            # Enable this collision polygon
-    observation_sources: ["scan"]              # Sensor sources for collision detection
-    scan:
-      type: "scan"                             # Laser scan sensor type
-      topic: "scan_restamped"                  # Restamped laser scan topic
-      min_height: 0.15                         # Minimum height for collision detection
-      max_height: 2.0                          # Maximum height for collision detection
-      enabled: True                            # Enable laser scan collision detection
+# # Marcus: added collision_monitor
+# collision_monitor:
+#   ros__parameters:
+#     base_frame_id: "base_footprint"            # Robot base frame for collision detection
+#     odom_frame_id: "odom"                      # Odometry frame reference
+#     cmd_vel_in_topic: "cmd_vel_smoothed"       # Input velocity commands (post-smoothing)
+#     cmd_vel_out_topic: "cmd_vel"               # Output velocity commands (post-monitoring)
+#     state_topic: "collision_monitor_state"     # Monitor state topic
+#     transform_tolerance: 0.6                   # Tight transform tolerance for safety
+#     source_timeout: 1.0                        # Sensor data timeout
+#     base_shift_correction: True                # Correct for base frame shifts
+#     stop_pub_timeout: 2.0                      # Timeout for stop commands
+#     polygons: ["FootprintApproach"]            # Active collision detection polygons
+#     FootprintApproach:
+#       type: "polygon"                          # Polygon-based collision detection
+#       action_type: "approach"                  # Slow down when approaching obstacles
+#       footprint_topic: "/local_costmap/published_footprint"  # Robot footprint source
+#       time_before_collision: 1.1               # Time horizon for collision prediction - accounts for WebRTC latency
+#       simulation_time_step: 0.1                # Time step for collision simulation
+#       min_points: 6                            # Minimum points for polygon validity
+#       visualize: True                          # Enable visualization in RViz
+#       enabled: True                            # Enable this collision polygon
+#     observation_sources: ["scan"]              # Sensor sources for collision detection
+#     scan:
+#       type: "scan"                             # Laser scan sensor type
+#       topic: "scan_restamped"                  # Restamped laser scan topic
+#       min_height: 0.15                         # Minimum height for collision detection
+#       max_height: 2.0                          # Maximum height for collision detection
+#       enabled: True                            # Enable laser scan collision detection
