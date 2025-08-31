@@ -117,8 +117,8 @@ controller_server:
   ros__parameters:
     tf_buffer_duration: 50.0                     # Large TF buffer essential for WebRTC timing robustness
     transform_tolerance: 0.6                     # Transform synchronization tolerance
-    # controller_frequency: 20.0                   # Control loop frequency - may need reduction to 10-15Hz for WebRTC stability
-    controller_frequency: 10.0                   # Control loop frequency - matches model_dt 0.1s to prevent timing issues, slightly less responsive control but more stable
+    controller_frequency: 20.0                   # Control loop frequency - may need reduction to 10-15Hz for WebRTC stability
+    # controller_frequency: 10.0                   # Control loop frequency - matches model_dt 0.1s to prevent timing issues, slightly less responsive control but more stable
     costmap_update_timeout: 0.30                 # Timeout for costmap updates - may need increase for WebRTC delays
     min_x_velocity_threshold: 0.001              # Minimum X velocity considered as movement
     min_y_velocity_threshold: 0.001              # Minimum Y velocity considered as movement  
@@ -238,10 +238,10 @@ local_costmap:
   local_costmap:
     ros__parameters:
       # Marcus: changed update and publish frequency to 20.0
-      # update_frequency: 20.0                     # High frequency updates for dynamic obstacles
-      # publish_frequency: 20.0                    # High frequency publishing for responsive control
-      update_frequency: 10.0                     # Reduced for better performance
-      publish_frequency: 10.0                    # Reduced for better performance
+      update_frequency: 20.0                     # High frequency updates for dynamic obstacles
+      publish_frequency: 20.0                    # High frequency publishing for responsive control
+      # update_frequency: 10.0                     # Reduced for better performance
+      # publish_frequency: 10.0                    # Reduced for better performance
       global_frame: odom                         # Use odometry frame for local planning
       robot_base_frame: base_footprint           # Robot's base frame reference
       use_sim_time: False                        # Real-time operation
@@ -403,7 +403,8 @@ planner_server:
   ros__parameters:
     use_sim_time: False                         # Real-time operation for path planning
     # expected_planner_frequency: 2.0             # Conservative for external computer - could increase to 3-5Hz for better replanning
-    expected_planner_frequency: 3.0             # Conservative for external computer - could increase to 3-5Hz for better replanning
+    # expected_planner_frequency: 3.0             # Conservative for external computer - could increase to 3-5Hz for better replanning
+    expected_planner_frequency: 5.0             # Increased for faster replanning
     planner_plugins: ["GridBased"]              # Available planning algorithms
     tf_buffer_duration: 50.0                    # Large TF buffer for timing robustness
     transform_tolerance: 0.6                    # Transform synchronization tolerance
