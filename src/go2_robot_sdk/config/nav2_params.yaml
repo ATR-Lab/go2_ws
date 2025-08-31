@@ -251,8 +251,8 @@ local_costmap:
       resolution: 0.05                           # Cell resolution (5cm) - fine detail for Go2
       footprint: "[ [0.360, 0.200], [0.360, -0.200], [-0.450, -0.200], [-0.450, 0.200] ]"  # Go2 physical dimensions
       # Marcus: added denoise layer
-      plugins: ["voxel_layer", "inflation_layer"] # Active costmap layers
-      # plugins: ["obstacle_layer", "inflation_layer"]
+      # plugins: ["voxel_layer", "inflation_layer"] # Active costmap layers
+      plugins: ["obstacle_layer", "inflation_layer"]
       
       # static_layer:
       #   plugin: "nav2_costmap_2d::StaticLayer"
@@ -266,28 +266,27 @@ local_costmap:
       #   group_connectivity_type: 8
 
       # Marcus: replace voxel with obstacle layer
-      # obstacle_layer:
-      #   plugin: "nav2_costmap_2d::ObstacleLayer"
-      #   enabled: True
-      #   observation_sources: scan
-      #   scan:
-      #     topic: /scan_restamped
-      #     max_obstacle_height: 2.0
-      #     clearing: True
-      #     marking: True
-      #     data_type: "LaserScan"
-      #     raytrace_max_range: 3.0
-      #     raytrace_min_range: 0.05
-      #     obstacle_max_range: 2.5
-      #     obstacle_min_range: 0.05
-      #     observation_persistence: 0.35
-      #     # expected_update_rate: 0.18
-      #     min_obstacle_height: 0.1
-      #     max_obstacle_height: 0.5
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        observation_sources: scan
+        scan:
+          topic: /scan_restamped
+          clearing: True
+          marking: True
+          data_type: "LaserScan"
+          raytrace_max_range: 4.0
+          raytrace_min_range: 0.05
+          obstacle_max_range: 3.0
+          obstacle_min_range: 0.05
+          observation_persistence: 0.20
+          # expected_update_rate: 0.18
+          min_obstacle_height: 0.0
+          max_obstacle_height: 2.0
 
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"    # 3D obstacle representation
-        enabled: True                            # Enable dynamic obstacle detection
+        enabled: False                            # Disabled (using ObstacleLayer for LaserScan)
         publish_voxel_map: True                  # Publish 3D voxel data for visualization
         origin_z: 0.0                            # Z-origin for voxel grid
         z_resolution: 0.05                       # Vertical resolution (5cm)
@@ -331,12 +330,12 @@ global_costmap:
       resolution: 0.05                           # Cell resolution (5cm) - matches local costmap
       track_unknown_space: True                  # Track unexplored areas
       static_map: True                           # Use static map as base layer
-      width: 500                                 # Large map width (25m x 25m)
-      height: 500                                # Large map height
-      origin_x: -250.0                           # Map origin X coordinate
-      origin_y: -250.0                           # Map origin Y coordinate  
+      # width: 500                                 # Static map supplies size
+      # height: 500                                # Static map supplies size
+      # origin_x: -250.0                           # Static map supplies origin
+      # origin_y: -250.0                           # Static map supplies origin  
       footprint: "[ [0.360, 0.200], [0.360, -0.200], [-0.450, -0.200], [-0.450, 0.200] ]"  # Go2 physical dimensions
-      plugins: ["static_layer", "voxel_layer", "inflation_layer"]  # Active costmap layers
+      plugins: ["static_layer", "inflation_layer"]  # Active costmap layers
 
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"   # Static map layer
@@ -351,7 +350,7 @@ global_costmap:
 
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"    # 3D obstacle representation
-        enabled: True                            # Enable dynamic obstacle detection
+        enabled: False                            # Disabled (static + inflation only)
         publish_voxel_map: True                  # Publish 3D voxel data
         origin_z: 0.0                            # Z-origin for voxel grid
         z_resolution: 0.05                       # Vertical resolution (5cm)
