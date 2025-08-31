@@ -276,10 +276,10 @@ slam_toolbox:
     correlation_search_space_resolution: 0.005
     
     # correlation_search_space_smear_deviation: Gaussian smoothing for correlation surface
-    # Expected: Float 0.05-0.2
+    # Expected: Float 0.0025-0.05 (SLAM Toolbox enforced range)
     # Impact: Higher values = smoother correlation surface (more robust) but less precise
-    # 0.1 provides good balance between robustness and precision
-    correlation_search_space_smear_deviation: 0.1
+    # 0.05 provides maximum allowed smoothing for robust matching
+    correlation_search_space_smear_deviation: 0.05
 
     # ============================================================================
     # LOOP CLOSURE SEARCH PARAMETERS
@@ -299,7 +299,7 @@ slam_toolbox:
     loop_search_space_resolution: 0.05
     
     # loop_search_space_smear_deviation: Smoothing for loop closure correlation
-    # Expected: Float 0.01-0.05
+    # Expected: Float 0.0025-0.05 (SLAM Toolbox enforced range)
     # Impact: Lower values = more precise matching, higher values = more robust
     # 0.03 provides good precision for loop closure without excessive smoothing
     loop_search_space_smear_deviation: 0.03
