@@ -470,9 +470,8 @@ controller_server:
     # controller_frequency: Control loop execution frequency (Hz)
     # Expected: 10-50Hz (balance responsiveness with computational load)
     # Impact: Higher frequency = more responsive but more CPU intensive
-    # 20Hz provides good responsiveness, 10Hz may be needed for WebRTC stability
-    controller_frequency: 20.0                   # Control loop frequency - may need reduction to 10-15Hz for WebRTC stability
-    # controller_frequency: 10.0                   # Alternative: matches model_dt 0.1s, less responsive but more stable
+    # 15Hz optimized for WebRTC latency and larger costmap processing
+    controller_frequency: 15.0                   # Optimized for WebRTC latency and expanded costmap
     
     # costmap_update_timeout: Maximum time to wait for costmap updates (seconds)
     # Expected: 0.1-1.0 (should be much less than controller period)
@@ -1069,16 +1068,14 @@ local_costmap:
       # update_frequency: How often to recalculate costmap (Hz)
       # Expected: 5-50Hz (balance responsiveness with CPU load)
       # Impact: Higher frequency = more responsive but higher computational cost
-      # 20Hz provides responsive obstacle detection for dynamic environments
-      update_frequency: 20.0                     # High frequency updates for dynamic obstacles
-      # update_frequency: 10.0                     # Alternative: reduced for better performance
+      # 15Hz balanced for larger costmap size and WebRTC latency
+      update_frequency: 15.0                     # Optimized for larger costmap and WebRTC latency
       
       # publish_frequency: How often to publish costmap data (Hz)
       # Expected: 5-50Hz (usually matches or is less than update_frequency)
       # Impact: Higher frequency = more data bandwidth but more responsive control
-      # 20Hz provides high-rate data for responsive local planning
-      publish_frequency: 20.0                    # High frequency publishing for responsive control
-      # publish_frequency: 10.0                    # Alternative: reduced for better performance
+      # 12Hz optimized for WebRTC bandwidth and responsive control
+      publish_frequency: 12.0                    # Optimized for WebRTC bandwidth efficiency
       
       # ============================================================================
       # COORDINATE FRAMES AND TIMING
@@ -1134,20 +1131,20 @@ local_costmap:
       # width: Costmap width in meters
       # Expected: 4-20 meters (balance coverage with computation)
       # Impact: Larger width = see obstacles further but more computation
-      # 6m provides good local planning horizon for Go2's speed
-      width: 6                                   # Costmap width in meters - local planning area
+      # 16m leverages Go2 Pro LiDAR's 30m range for 8m detection radius
+      width: 16                                  # Costmap width in meters - expanded for Go2 Pro LiDAR range
       
       # height: Costmap height in meters
       # Expected: 4-20 meters (usually matches width for square costmap)
       # Impact: Larger height = see obstacles further laterally
-      # 6m provides symmetric coverage around robot
-      height: 6                                  # Costmap height in meters - local planning area
+      # 16m provides symmetric coverage leveraging Go2 Pro LiDAR capability
+      height: 16                                 # Costmap height in meters - expanded for Go2 Pro LiDAR range
       
       # resolution: Cell size in meters (smaller = higher detail)
       # Expected: 0.02-0.1 meters (balance detail with memory/computation)
       # Impact: Smaller resolution = more detail but larger memory usage
-      # 0.05m (5cm) provides good detail for Go2's size and precision
-      resolution: 0.05                           # Cell resolution (5cm) - fine detail for Go2
+      # 0.03m (3cm) leverages Go2 Pro LiDAR's 2cm accuracy for finer detail
+      resolution: 0.03                           # Cell resolution (3cm) - optimized for Go2 Pro LiDAR precision
       
       # ============================================================================
       # ROBOT FOOTPRINT DEFINITION
@@ -1251,8 +1248,8 @@ local_costmap:
           # raytrace_max_range: Maximum range for clearing rays (meters)
           # Expected: 2.0-10.0 (should be less than laser max range)
           # Impact: Higher values = clear obstacles at greater distance
-          # 4.0m provides good clearing range without excessive computation
-          raytrace_max_range: 4.0
+          # 12.0m leverages Go2 Pro LiDAR range for extensive clearing
+          raytrace_max_range: 12.0
           
           # raytrace_min_range: Minimum range for clearing rays (meters)
           # Expected: 0.0-0.1 (very close to sensor)
@@ -1263,8 +1260,8 @@ local_costmap:
           # obstacle_max_range: Maximum range to mark obstacles (meters)
           # Expected: 2.0-6.0 (shorter than raytrace for reliability)
           # Impact: Higher values = detect distant obstacles (may include noise)
-          # 3.0m provides reliable obstacle detection range
-          obstacle_max_range: 3.0
+          # 8.0m utilizes Go2 Pro LiDAR's range for early obstacle detection
+          obstacle_max_range: 8.0
           
           # obstacle_min_range: Minimum range to mark obstacles (meters)
           # Expected: 0.0-0.2 (avoid sensor dead zone)
@@ -1275,8 +1272,8 @@ local_costmap:
           # observation_persistence: How long to keep obstacle observations (seconds)
           # Expected: 0.1-2.0 (balance persistence with dynamic response)
           # Impact: Higher values = obstacles persist longer (less dynamic)
-          # 0.20s allows for brief sensor occlusion while staying responsive
-          observation_persistence: 0.20
+          # 0.03s leverages Go2 Pro LiDAR accuracy for rapid obstacle clearing
+          observation_persistence: 0.03
           
           # expected_update_rate: Expected sensor update frequency (Hz) - DISABLED
           # Expected: Sensor's actual update rate (e.g., 10-30 Hz)
@@ -1392,8 +1389,8 @@ local_costmap:
           # raytrace_max_range: Maximum range for clearing rays in local voxel map (meters)
           # Expected: 2.0-6.0 (balance local accuracy with computational load)
           # Impact: Higher values = clear distant obstacles in local map
-          # 3.0m provides good local clearing range without excessive computation
-          raytrace_max_range: 3.0                # Maximum range for raytracing
+          # 12.0m leverages Go2 Pro LiDAR range for extensive local clearing
+          raytrace_max_range: 12.0               # Maximum range for raytracing
           
           # raytrace_min_range: Minimum range for clearing rays in local voxel map (meters)
           # Expected: 0.0-0.1 (avoid sensor dead zone)
@@ -1404,8 +1401,8 @@ local_costmap:
           # obstacle_max_range: Maximum range for obstacle detection in local voxel map (meters)
           # Expected: 2.0-4.0 (shorter than raytrace for local reliability)
           # Impact: Higher values = detect more distant obstacles (may include noise)
-          # 2.5m provides reliable local detection range for voxel obstacle marking
-          obstacle_max_range: 2.5                # Maximum range for obstacle detection
+          # 8.0m utilizes Go2 Pro LiDAR range for early local obstacle detection
+          obstacle_max_range: 8.0                # Maximum range for obstacle detection
           
           # obstacle_min_range: Minimum range for obstacle detection in local voxel map (meters)
           # Expected: 0.0-0.2 (avoid sensor dead zone)
@@ -1416,10 +1413,8 @@ local_costmap:
           # observation_persistence: How long to keep voxel observations (seconds)
           # Expected: 0.05-0.5 (much shorter than global for dynamic response)
           # Impact: Higher values = obstacles persist longer (less dynamic response)
-          # Multiple options shown: 0.35s (original), 0.10s (reduced), 0.05s (current)
-          # observation_persistence: 0.35        # Original: longer persistence
-          # observation_persistence: 0.10        # Reduced: moderate persistence (100ms)
-          observation_persistence: 0.05          # Current: fast obstacle clearing for dynamic local environment
+          # 0.03s leverages Go2 Pro LiDAR accuracy for immediate dynamic response
+          observation_persistence: 0.03          # Optimized for Go2 Pro LiDAR accuracy and dynamic response
           
           # expected_update_rate: Expected sensor update frequency (DISABLED)
           # Expected: Sensor's actual rate (e.g., 10-30 Hz)
@@ -1437,7 +1432,7 @@ local_costmap:
           # Expected: 0.3-2.0 (sensor-specific limit)
           # Impact: Limits how tall obstacles this sensor can detect
           # 0.5m for local planning focus on immediate obstacles
-          max_obstacle_height: 0.5               # Maximum obstacle height for local planning
+          max_obstacle_height: 2.5               # Optimized for Go2 Pro LiDAR vertical FOV
 
       # ============================================================================
       # INFLATION LAYER CONFIGURATION  
@@ -1636,14 +1631,14 @@ global_costmap:
         # z_resolution: Vertical resolution of voxel grid cells (meters)
         # Expected: 0.02-0.1 (balance between detail and memory usage)
         # Impact: Smaller values = finer vertical detail but more memory/computation
-        # 0.05m (5cm) provides good vertical resolution matching horizontal
-        z_resolution: 0.05                       # Vertical resolution (5cm cells)
+        # 0.04m leverages Go2 Pro LiDAR precision for finer vertical resolution
+        z_resolution: 0.04                       # Vertical resolution optimized for Go2 Pro LiDAR
         
         # z_voxels: Number of vertical voxel layers in the 3D grid
         # Expected: 10-50 (depends on environment height and z_resolution)
         # Impact: More voxels = detect taller obstacles but use more memory
-        # 16 voxels × 0.05m = 0.8m total height coverage for obstacles
-        z_voxels: 16                             # Number of vertical voxels (0.8m total height)
+        # 32 voxels × 0.04m = 1.28m height coverage optimized for Go2 Pro LiDAR
+        z_voxels: 32                             # Number of vertical voxels optimized for Go2 Pro LiDAR
         
         # max_obstacle_height: Maximum obstacle height to track in voxel grid (meters)
         # Expected: 1.0-4.0 (should match or exceed z_voxels × z_resolution)
@@ -1720,8 +1715,8 @@ global_costmap:
           # observation_persistence: How long to keep observations (global uses longer)
           # Expected: 0.2-2.0 (longer than local for stability)
           # Impact: Higher values = more persistent obstacles in global map
-          # 0.35s provides longer persistence for global planning stability
-          observation_persistence: 0.35          # Longer persistence for global map
+          # 0.08s optimized for Go2 Pro LiDAR accuracy and obstacle clearing
+          observation_persistence: 0.08          # Optimized persistence for Go2 Pro LiDAR
           
           # expected_update_rate: Expected sensor frequency (DISABLED)
           # Expected: Sensor's actual rate (e.g., 10-30 Hz)
@@ -1871,10 +1866,8 @@ planner_server:
     # expected_planner_frequency: Target planning frequency (Hz)
     # Expected: 1-10Hz (balance responsiveness with computation)
     # Impact: Higher frequency = more responsive replanning but more CPU
-    # 5.0Hz provides good replanning responsiveness for dynamic environments
-    # expected_planner_frequency: 2.0             # Conservative for limited compute
-    # expected_planner_frequency: 3.0             # Moderate responsiveness
-    expected_planner_frequency: 5.0             # Increased for faster replanning
+    # 8.0Hz leverages Go2 Pro LiDAR data quality for faster replanning
+    expected_planner_frequency: 8.0             # Optimized for Go2 Pro LiDAR data quality
     
     # planner_plugins: List of available path planning algorithms
     # Expected: Array of planner plugin names

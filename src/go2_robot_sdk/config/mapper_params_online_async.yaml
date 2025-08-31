@@ -133,8 +133,8 @@ slam_toolbox:
     # max_laser_range: Maximum laser range to use for mapping (meters)
     # Expected: Float matching your lidar's range (typically 10.0-30.0)
     # Impact: Higher values = larger mapping area but more noise and computational load
-    # Should be <= your lidar's actual max range, 20.0m is common for indoor robots
-    max_laser_range: 20.0 # for rastering images
+    # 25.0m utilizes 80% of Go2 Pro LiDAR's 30m range capability
+    max_laser_range: 25.0 # Optimized for Go2 Pro LiDAR 30m range
     
     # minimum_time_interval: Minimum time between processing scans (seconds)
     # Expected: Float 0.1-1.0
@@ -272,8 +272,8 @@ slam_toolbox:
     # correlation_search_space_resolution: Resolution of correlation search grid (meters)
     # Expected: Float 0.005-0.02 (should be finer than map resolution)
     # Impact: Finer resolution = more accurate matching but slower computation
-    # 0.01m (1cm) provides good accuracy, 0.005m for high precision, 0.02m for speed
-    correlation_search_space_resolution: 0.01
+    # 0.005m leverages Go2 Pro LiDAR's 2cm accuracy for high precision matching
+    correlation_search_space_resolution: 0.005
     
     # correlation_search_space_smear_deviation: Gaussian smoothing for correlation surface
     # Expected: Float 0.05-0.2
