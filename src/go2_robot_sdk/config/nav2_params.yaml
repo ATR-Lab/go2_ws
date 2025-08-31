@@ -245,6 +245,8 @@ local_costmap:
       global_frame: odom                         # Use odometry frame for local planning
       robot_base_frame: base_footprint           # Robot's base frame reference
       use_sim_time: False                        # Real-time operation
+      transform_tolerance: 0.6                   # TF tolerance for sensor data alignment
+      footprint_clearing_enabled: True           # Clear cells under robot footprint
       rolling_window: True                       # Moving window follows robot
       width: 6                                   # Costmap width in meters - local planning area
       height: 6                                  # Costmap height in meters - local planning area
@@ -275,6 +277,7 @@ local_costmap:
           clearing: True
           marking: True
           data_type: "LaserScan"
+          inf_is_valid: True                     # Toggles inf values to be counted in the raycast path finding
           raytrace_max_range: 4.0
           raytrace_min_range: 0.05
           obstacle_max_range: 3.0
