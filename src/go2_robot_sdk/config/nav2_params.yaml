@@ -403,7 +403,8 @@ planner_server:
     use_sim_time: False                         # Real-time operation for path planning
     # expected_planner_frequency: 2.0             # Conservative for external computer - could increase to 3-5Hz for better replanning
     # expected_planner_frequency: 3.0             # Conservative for external computer - could increase to 3-5Hz for better replanning
-    expected_planner_frequency: 5.0             # Increased for faster replanning
+    # expected_planner_frequency: 5.0             # Increased for faster replanning
+    expected_planner_frequency: 8.0             # Increased for faster replanning
     planner_plugins: ["GridBased"]              # Available planning algorithms
     tf_buffer_duration: 50.0                    # Large TF buffer for timing robustness
     transform_tolerance: 0.6                    # Transform synchronization tolerance
