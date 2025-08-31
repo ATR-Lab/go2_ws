@@ -156,13 +156,14 @@ class Go2NodeFactory:
                 ],
                 parameters=[{
                     'target_frame': f'{namespace}/base_link',  # Use base_link to avoid transform timing issues with restamper
-                    'max_height': 0.8,                         # 96° vertical FOV at reasonable distance (~0.8m at 1m range)
-                    'min_height': 0.05,                        # Matches radar's near blind spot specification
-                    'angle_min': -0.5236,                      # ±30° angular range (narrower than 96° FOV for reliability)
-                    'angle_max': 0.5236,                       # ±30° angular range - focused on most reliable sensor data
+                    'max_height': 1.2,                         # Increased vertical coverage for better obstacle detection
+                    'min_height': 0.02,                        # Slightly lower for ground-level obstacle detection
+                    'angle_min': -1.0472,                      # ±60° angular range (wider coverage, less bottleneck)
+                    'angle_max': 1.0472,                       # ±60° angular range - better data distribution
                     'angle_increment': 0.0349,                 # 2° resolution - appropriate for radar data processing
                     'range_min': 0.05,                         # Matches radar's near blind spot specification
-                    'range_max': 30.0                          # Matches radar's maximum 30m range capability
+                    'range_max': 30.0,                         # Matches radar's maximum 30m range capability
+                    'publish_rate': 10.0                       # Rate limit to 10Hz to prevent queue overflow
                 }],
                 output='screen',
             )
@@ -178,13 +179,14 @@ class Go2NodeFactory:
                 ],
                 parameters=[{
                     'target_frame': 'base_link',                # Use base_link to avoid transform timing issues with restamper
-                    'max_height': 0.8,                          # 96° vertical FOV at reasonable distance (~0.8m at 1m range)
-                    'min_height': 0.05,                         # Matches radar's near blind spot specification
-                    'angle_min': -0.5236,                       # ±30° angular range (narrower than 96° FOV for reliability)
-                    'angle_max': 0.5236,                        # ±30° angular range - focused on most reliable sensor data
+                    'max_height': 1.2,                          # Increased vertical coverage for better obstacle detection
+                    'min_height': 0.02,                         # Slightly lower for ground-level obstacle detection
+                    'angle_min': -1.0472,                       # ±60° angular range (wider coverage, less bottleneck)
+                    'angle_max': 1.0472,                        # ±60° angular range - better data distribution
                     'angle_increment': 0.0349,                  # 2° resolution - appropriate for radar data processing
                     'range_min': 0.05,                          # Matches radar's near blind spot specification
-                    'range_max': 30.0                           # Matches radar's maximum 30m range capability
+                    'range_max': 30.0,                          # Matches radar's maximum 30m range capability
+                    'publish_rate': 10.0                        # Rate limit to 10Hz to prevent queue overflow
                 }],
                 output='screen',
             )
