@@ -418,7 +418,8 @@ planner_server:
       allow_unknown: true                       # Allow planning through unknown space
       downsample_costmap: false                 # Use full resolution costmap
       # tolerance: 0.1                            # Goal tolerance for planning
-      tolerance: 0.2                            # Goal tolerance for planning, less strict
+      # tolerance: 0.2                            # Goal tolerance for planning, less strict
+      tolerance: 0.4                            # Goal tolerance for planning -- increase tolerance to keep paths further from obstacles
       motion_model_for_search: "MOORE"          # 8-connected grid search
       use_astar: false                          # Use Dijkstra instead of A*
       max_iterations: 200000                    # Maximum search iterations - external computer can handle higher for complex paths
