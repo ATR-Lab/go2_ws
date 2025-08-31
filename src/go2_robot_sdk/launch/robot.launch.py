@@ -155,8 +155,14 @@ class Go2NodeFactory:
                     ('scan', f'{namespace}/scan'),
                 ],
                 parameters=[{
-                    'target_frame': f'{namespace}/base_link',
-                    'max_height': 0.1
+                    'target_frame': f'{namespace}/base_footprint',
+                    'max_height': 1.5,
+                    'min_height': -0.5,
+                    'angle_min': -1.5708,
+                    'angle_max': 1.5708,
+                    'angle_increment': 0.0174533,
+                    'range_min': 0.1,
+                    'range_max': 20.0
                 }],
                 output='screen',
             )
@@ -171,8 +177,14 @@ class Go2NodeFactory:
                     ('scan', 'scan'),
                 ],
                 parameters=[{
-                    'target_frame': 'base_link',
-                    'max_height': 0.5
+                    'target_frame': 'base_footprint',
+                    'max_height': 1.5,
+                    'min_height': -0.5,
+                    'angle_min': -1.5708,
+                    'angle_max': 1.5708,
+                    'angle_increment': 0.0174533,
+                    'range_min': 0.1,
+                    'range_max': 20.0
                 }],
                 output='screen',
             )
