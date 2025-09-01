@@ -122,7 +122,7 @@ slam_toolbox:
     # Expected: Float > 0.0 (typically 1.0-10.0)
     # Impact: Lower values = more frequent saves (safer) but higher I/O load
     # 5.0 seconds balances safety with performance, 1.0 for critical applications
-    map_update_interval: 5.0
+    map_update_interval: 0.2
     
     # resolution: Map resolution in meters per pixel
     # Expected: Float 0.01-0.1 (typically 0.05)
@@ -140,7 +140,7 @@ slam_toolbox:
     # Expected: Float 0.1-1.0
     # Impact: Higher values = less frequent updates (faster) but potentially less accurate tracking
     # 0.5s prevents excessive processing during slow movement, lower for fast robots
-    minimum_time_interval: 0.5
+    minimum_time_interval: 0.1
     
     # transform_timeout: Timeout for TF lookups (seconds)
     # Expected: Float 0.1-1.0
@@ -189,13 +189,13 @@ slam_toolbox:
     # Higher values = less frequent updates (faster processing, may lose tracking)
     # 0.2m allows more frequent updates for better quality, 0.5m is more conservative
     # minimum_travel_distance: 0.5  # Conservative default
-    minimum_travel_distance: 0.2 # Allow for more frequent updates
+    minimum_travel_distance: 0.05 # Allow for more frequent updates
     
     # minimum_travel_heading: Minimum rotation before processing new scan (radians)
     # Expected: Float 0.1-1.0 (roughly 6-57 degrees)
     # Impact: Lower values = more updates during rotation (better angular tracking)
     # 0.5 radians (~29 degrees) balances update frequency with performance
-    minimum_travel_heading: 0.5
+    minimum_travel_heading: 0.1
     
     # scan_buffer_size: Number of recent scans to keep in memory for matching
     # Expected: Integer 5-20

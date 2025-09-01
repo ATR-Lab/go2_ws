@@ -639,7 +639,7 @@ controller_server:
       # Expected: 10-60 seconds (balance between patience and responsiveness)
       # Impact: Longer time = more patient with temporary obstacles
       # 20.0s allows time for complex maneuvers and temporary obstacle clearance
-      movement_time_allowance: 20.0             # Time allowed without progress before failure
+      movement_time_allowance: 5.0             # Time allowed without progress before failure
       
     # ============================================================================
     # GOAL CHECKER CONFIGURATION  
@@ -1348,7 +1348,7 @@ local_costmap:
           # Expected: 0.1-2.0 (balance persistence with dynamic response)
           # Impact: Higher values = obstacles persist longer (less dynamic)
           # 0.1s provides better stability while still allowing rapid clearing
-          observation_persistence: 0.1
+          observation_persistence: 0.03
           
           # expected_update_rate: Expected sensor update frequency (Hz) - DISABLED
           # Expected: Sensor's actual update rate (e.g., 10-30 Hz)
