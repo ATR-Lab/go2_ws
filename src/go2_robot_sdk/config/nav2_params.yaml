@@ -114,8 +114,8 @@ amcl:
     # laser_max_range: Maximum laser range to use for localization (meters)
     # Expected: Should match or be less than lidar's actual max range
     # Impact: Higher values = use more distant readings (may include noise)
-    # 30.0m uses full capability of high-end lidars
-    laser_max_range: 30.0                           # Maximum laser range to consider - full lidar capability
+    # 15.0m optimized for speed - reduced from 30.0m to decrease computational load
+    laser_max_range: 15.0                           # Reduced range for faster AMCL processing
     
     # laser_min_range: Minimum laser range to use (-1 = use sensor minimum)
     # Expected: -1.0 (auto-detect) or positive value in meters
@@ -132,8 +132,8 @@ amcl:
     # max_beams: Maximum number of laser beams to process
     # Expected: 50-360 (balance accuracy with computation time)
     # Impact: More beams = better localization accuracy but slower processing
-    # 120 beams provides good coverage without excessive computation
-    max_beams: 120                                  # Maximum laser beams to use - balance accuracy vs computation
+    # 80 beams optimized for speed - reduced from 120 to decrease computational load
+    max_beams: 80                                   # Reduced beams for faster processing
     
     # scan_topic: ROS topic name for laser scan input
     # Expected: Valid ROS topic name (e.g., "scan", "scan_restamped")
@@ -149,14 +149,14 @@ amcl:
     # max_particles: Maximum number of particles in the filter
     # Expected: 500-5000 (higher = better accuracy but more CPU intensive)
     # Impact: More particles = better localization precision but slower processing
-    # 1500 provides good balance for real-time operation
-    max_particles: 1500                             # Maximum particles in filter - localization precision vs CPU
+    # 800 optimized for fast obstacle detection - reduced from 1500 to free up CPU
+    max_particles: 800                              # Reduced particles for faster obstacle detection
     
     # min_particles: Minimum number of particles to maintain
     # Expected: 100-1000 (should be significantly less than max_particles)
     # Impact: Too few = poor localization, too many = waste computation
-    # 500 maintains good localization robustness
-    min_particles: 500                              # Minimum particles in filter - maintain localization robustness
+    # 300 optimized for performance - reduced from 500 to free up CPU
+    min_particles: 300                              # Reduced minimum particles for better performance
     
     # pf_err: Maximum error tolerance for particle filter
     # Expected: 0.01-0.1 (lower = more accurate but slower adaptation)
@@ -405,8 +405,8 @@ bt_navigator:
     # bt_loop_duration: Behavior tree execution period in milliseconds
     # Expected: 10-100ms (10 = 100Hz, 100 = 10Hz)
     # Impact: Lower values = more responsive but higher CPU load
-    # 10ms (100Hz) may be too aggressive for WebRTC latency, consider 20-50ms
-    bt_loop_duration: 10                         # Behavior tree execution frequency (10ms) - may be too aggressive for WebRTC
+    # 50ms (20Hz) optimized for CPU efficiency - reduced from 10ms to free resources for obstacle detection
+    bt_loop_duration: 50                          # Behavior tree execution frequency (50ms) - CPU optimized
     
     # default_server_timeout: Default timeout for action servers (seconds)
     # Expected: 10-60 seconds (depends on mission complexity)
@@ -1206,14 +1206,14 @@ local_costmap:
       # width: Costmap width in meters
       # Expected: 4-20 meters (balance coverage with computation)
       # Impact: Larger width = see obstacles further but more computation
-      # 16m leverages Go2 Pro LiDAR's 30m range for 8m detection radius
-      width: 16                                  # Costmap width in meters - expanded for Go2 Pro LiDAR range
+      # 12m optimized for speed - reduced from 16m to decrease computational load
+      width: 12                                  # Costmap width in meters - optimized for performance
       
       # height: Costmap height in meters
       # Expected: 4-20 meters (usually matches width for square costmap)
       # Impact: Larger height = see obstacles further laterally
-      # 16m provides symmetric coverage leveraging Go2 Pro LiDAR capability
-      height: 16                                 # Costmap height in meters - expanded for Go2 Pro LiDAR range
+      # 12m optimized for speed - reduced from 16m to match width and decrease computational load
+      height: 12                                 # Costmap height in meters - optimized for performance
       
       # resolution: Cell size in meters (smaller = higher detail)
       # Expected: 0.02-0.1 meters (balance detail with memory/computation)
@@ -1552,14 +1552,14 @@ global_costmap:
       # update_frequency: How often to recalculate global costmap (Hz)
       # Expected: 1-20Hz (much lower than local costmap acceptable)
       # Impact: Higher frequency = more responsive but higher computational cost
-      # 20Hz provides responsive updates but may be high for large maps
-      update_frequency: 19.0                     # High frequency updates for dynamic mapping
+      # 3.0Hz optimized for CPU efficiency - reduced from 19Hz to free resources for obstacle detection
+      update_frequency: 3.0                      # Low frequency for CPU efficiency
       
       # publish_frequency: How often to publish global costmap data (Hz)  
       # Expected: 1-20Hz (balance data bandwidth with utility)
       # Impact: Higher frequency = more data but more responsive planning
-      # 20Hz matches update frequency for consistent data flow
-      publish_frequency: 19.0                    # High frequency publishing
+      # 3.0Hz matches update frequency for consistent data flow - reduced from 19Hz
+      publish_frequency: 3.0                     # Low frequency for CPU efficiency
       
       # ============================================================================
       # COORDINATE FRAMES
@@ -1592,9 +1592,8 @@ global_costmap:
       # resolution: Cell size in meters (should match local costmap)
       # Expected: 0.02-0.1 meters (balance detail with memory)
       # Impact: Finer resolution = more detail but larger memory/computation
-      # 0.05m matches local costmap for consistent planning
-      # TODO: Identify the optimal resolution for the global costmap, or value we should use
-      resolution: 0.03                           # Cell resolution (5cm) - matches local costmap
+      # 0.05m matches local costmap resolution - optimized from 0.03 for CPU efficiency
+      resolution: 0.05                           # Cell resolution (5cm) - matches local costmap
       
       # track_unknown_space: Whether to track unexplored areas
       # Expected: true/false
