@@ -179,6 +179,8 @@ class Go2NodeFactory:
     
     def create_core_nodes(self) -> List[Node]:
         """Create core Go2 robot nodes"""
+        with_nav2 = LaunchConfiguration('nav2', default='true')
+        
         return [
             # Main robot driver (clean architecture)
             Node(
@@ -241,6 +243,29 @@ class Go2NodeFactory:
                     'output_topic': '/scan_restamped',
                     'frame_id': 'base_footprint'
                 }],
+            ),
+            # Collision monitor for immediate obstacle stopping (only with Nav2)
+            Node(
+                package='nav2_collision_monitor',
+                executable='collision_monitor',
+                name='collision_monitor',
+                output='screen',
+                condition=IfCondition(with_nav2),
+                parameters=[self.config.config_paths['nav2']],
+                arguments=['--ros-args', '--log-level', 'info']
+            ),
+            # Collision monitor lifecycle manager (auto-configure and activate)
+            Node(
+                package='nav2_lifecycle_manager',
+                executable='lifecycle_manager',
+                name='collision_monitor_lifecycle_manager',
+                output='screen',
+                condition=IfCondition(with_nav2),
+                parameters=[{
+                    'use_sim_time': False,
+                    'autostart': True,
+                    'node_names': ['collision_monitor']
+                }]
             ),
         ]
     
