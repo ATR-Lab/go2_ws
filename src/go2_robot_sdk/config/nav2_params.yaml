@@ -1626,9 +1626,9 @@ global_costmap:
           
           # marking: Whether this sensor marks obstacles in global costmap
           # Expected: true/false
-          # Impact: true = detect new obstacles for global planning
-          # Provides additional obstacle detection beyond static map
-          marking: True
+          # Impact: false = only clears phantom obstacles, doesn't add temporary ones
+          # Keeps global costmap stable by not marking every temporary obstacle
+          marking: False
           
           # data_type: Type of sensor data being processed
           # Expected: "LaserScan", "PointCloud2", "DepthCamera"
@@ -1643,10 +1643,10 @@ global_costmap:
           inf_is_valid: True
           
           # raytrace_max_range: Maximum range for clearing rays (meters)
-          # Expected: 4.0-12.0 (shorter than local for global stability)
+          # Expected: 2.0-6.0 (conservative for global stability)
           # Impact: Higher values = clear obstacles at greater distance
-          # 8.0m provides good clearing range without excessive noise
-          raytrace_max_range: 8.0
+          # 4.0m conservative clearing range for immediate phantom obstacles only
+          raytrace_max_range: 4.0
           
           # raytrace_min_range: Minimum range for clearing rays (meters)
           # Expected: 0.0-0.1 (very close to sensor)
@@ -1655,10 +1655,10 @@ global_costmap:
           raytrace_min_range: 0.05
           
           # obstacle_max_range: Maximum range to mark obstacles (meters)
-          # Expected: 4.0-8.0 (conservative for global planning)
-          # Impact: Higher values = detect distant obstacles (may include noise)
-          # 6.0m provides reliable obstacle detection for global planning
-          obstacle_max_range: 6.0
+          # Expected: 2.0-4.0 (very conservative for global planning)
+          # Impact: Not used since marking is disabled, but keeping conservative value
+          # 3.0m conservative range (not actively used since marking: False)
+          obstacle_max_range: 3.0
           
           # obstacle_min_range: Minimum range to mark obstacles (meters)
           # Expected: 0.0-0.2 (avoid sensor dead zone)
@@ -1667,10 +1667,10 @@ global_costmap:
           obstacle_min_range: 0.05
           
           # observation_persistence: How long to keep obstacle observations (seconds)
-          # Expected: 1.0-5.0 (longer than local for global stability)
+          # Expected: 5.0-15.0 (much longer than local for global stability)
           # Impact: Higher values = obstacles persist longer (more stable global planning)
-          # 2.0s provides stability while still allowing reasonable clearing time
-          observation_persistence: 2.0
+          # 10.0s provides high stability while still allowing phantom obstacle clearing
+          observation_persistence: 10.0
           
           # expected_update_rate: Expected sensor update frequency (Hz)
           # Expected: Sensor's actual update rate (e.g., 10-20 Hz)
