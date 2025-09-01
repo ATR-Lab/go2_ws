@@ -285,13 +285,88 @@ bt_navigator:
     # Expected: Valid file path to XML behavior tree definition
     # Impact: Defines logic flow for single goal missions (plan->execute->recover)
     # Custom BT allows time-based replanning and specialized recovery behaviors
-    default_nav_to_pose_bt_xml: "/opt/ros/humble/share/nav2_bt_navigator/behavior_trees/navigate_w_replanning_time.xml"  # Custom BT for time-based replanning
+    default_nav_to_pose_bt_xml: "/opt/ros/humble/share/nav2_bt_navigator/behavior_trees/navigate_to_pose_w_replanning_and_recovery.xml"  # Custom BT for time-based replanning
     
     # default_nav_through_poses_bt_xml: Behavior tree for multi-waypoint navigation
     # Expected: Valid file path to XML behavior tree definition  
     # Impact: Defines logic for sequential waypoint missions with replanning/recovery
     # More complex than single pose - handles waypoint progression and failure handling
     default_nav_through_poses_bt_xml: "/opt/ros/humble/share/nav2_bt_navigator/behavior_trees/navigate_through_poses_w_replanning_and_recovery.xml"  # Multi-waypoint navigation BT
+    
+    # ============================================================================
+    # AVAILABLE BEHAVIOR TREE ALTERNATIVES (FOR REFERENCE)
+    # ============================================================================
+    # Alternative behavior tree XML files available in Nav2 - uncomment to use
+    
+    # --- SINGLE GOAL NAVIGATION BEHAVIOR TREES ---
+    
+    # 1. EVENT-DRIVEN REPLANNING (RECOMMENDED FOR RAPID OBSTACLE RESPONSE)
+    # default_nav_to_pose_bt_xml: "/opt/ros/humble/share/nav2_bt_navigator/behavior_trees/navigate_to_pose_w_replanning_and_recovery.xml"
+    # WHEN TO USE: Best for rapid obstacle replanning - replans immediately when path becomes invalid or progress stalls
+    # PROS: Most responsive to obstacles, most efficient (only replans when needed)
+    # CONS: Depends on accurate progress/path validity detection
+    # IDEAL FOR: Dynamic environments, rapid obstacle avoidance, efficient resource use
+    
+    # 2. TIME-BASED REPLANNING (CURRENTLY ACTIVE)
+    # default_nav_to_pose_bt_xml: "/opt/ros/humble/share/nav2_bt_navigator/behavior_trees/navigate_w_replanning_time.xml"
+    # WHEN TO USE: Predictable replanning intervals regardless of obstacles or movement
+    # PROS: Predictable behavior, catches gradual environment changes, obstacle-independent
+    # CONS: May replan unnecessarily, fixed intervals may miss rapid changes
+    # IDEAL FOR: Slowly changing environments, predictable computational load
+    
+    # 3. DISTANCE-BASED REPLANNING  
+    # default_nav_to_pose_bt_xml: "/opt/ros/humble/share/nav2_bt_navigator/behavior_trees/navigate_w_replanning_distance.xml"
+    # WHEN TO USE: Replanning correlated with robot movement distance
+    # PROS: Efficient when stationary, replanning scales with movement, predictable computational cost
+    # CONS: Slow replanning when blocked/stopped, may miss immediate obstacles
+    # IDEAL FOR: Long-distance navigation, efficient resource usage during stops
+    
+    # 4. BASIC NAVIGATION (NO AUTOMATIC REPLANNING)
+    # default_nav_to_pose_bt_xml: "/opt/ros/humble/share/nav2_bt_navigator/behavior_trees/navigate_to_pose_simple.xml"
+    # WHEN TO USE: Static environments, testing, minimal computational overhead
+    # PROS: Simplest, lowest CPU usage, most predictable
+    # CONS: No automatic replanning, poor obstacle handling
+    # IDEAL FOR: Static environments, debugging, resource-constrained systems
+    
+    # --- MULTI-WAYPOINT NAVIGATION BEHAVIOR TREES ---
+    
+    # 1. WAYPOINT NAVIGATION WITH REPLANNING (CURRENTLY ACTIVE)
+    # default_nav_through_poses_bt_xml: "/opt/ros/humble/share/nav2_bt_navigator/behavior_trees/navigate_through_poses_w_replanning_and_recovery.xml"
+    # WHEN TO USE: Multi-waypoint missions with obstacle handling and recovery
+    # PROS: Handles waypoint sequences, includes recovery behaviors, robust to failures
+    # CONS: More complex, higher computational overhead
+    # IDEAL FOR: Patrol missions, complex multi-point tasks, robust autonomous operation
+    
+    # 2. SIMPLE WAYPOINT NAVIGATION (NO RECOVERY)
+    # default_nav_through_poses_bt_xml: "/opt/ros/humble/share/nav2_bt_navigator/behavior_trees/navigate_through_poses_simple.xml"
+    # WHEN TO USE: Simple waypoint following in static environments
+    # PROS: Simpler, lower overhead, predictable behavior
+    # CONS: No recovery behaviors, poor failure handling
+    # IDEAL FOR: Static environments, simple waypoint tasks, testing
+    
+    # ============================================================================
+    # CONFIGURATION RECOMMENDATIONS BY USE CASE
+    # ============================================================================
+    # 
+    # RAPID OBSTACLE REPLANNING (Your Current Goal):
+    # → Use: navigate_to_pose_w_replanning_and_recovery.xml
+    # → Reduce: movement_time_allowance to 3-5 seconds
+    # → Result: Immediate replanning when path blocked or progress stalls
+    #
+    # PREDICTABLE COMPUTATIONAL LOAD:
+    # → Use: navigate_w_replanning_time.xml (current)
+    # → Tune: Replanning interval in BT configuration
+    # → Result: Fixed replanning intervals, predictable CPU usage
+    #
+    # RESOURCE EFFICIENT LONG-DISTANCE:
+    # → Use: navigate_w_replanning_distance.xml  
+    # → Tune: Distance threshold in BT configuration
+    # → Result: Replanning scales with movement, efficient when stopped
+    #
+    # STATIC ENVIRONMENT/DEBUGGING:
+    # → Use: navigate_to_pose_simple.xml
+    # → Result: Minimal overhead, no automatic replanning
+    # 
     
     # ============================================================================
     # FRAMEWORK CONFIGURATION
@@ -1562,7 +1637,9 @@ global_costmap:
       # Expected: Array of layer names configured below
       # Impact: Each layer adds different types of obstacles/costs
       # static_layer for map data, obstacle_layer for real-time clearing, inflation_layer for safety margins
-      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]  # Active costmap layers
+      # plugins: ["static_layer", "obstacle_layer", "inflation_layer"]  # Active costmap layers
+      plugins: ["static_layer", "inflation_layer"]  # Active costmap layers
+
 
       # ============================================================================
       # STATIC LAYER CONFIGURATION
@@ -1587,108 +1664,108 @@ global_costmap:
       # ============================================================================
       # Real-time obstacle detection and clearing for global costmap
       
-      obstacle_layer:
-        # plugin: Implementation for 2D laser scan obstacle detection in global costmap
-        # Expected: "nav2_costmap_2d::ObstacleLayer" (standard 2D implementation)
-        # Impact: Provides real-time obstacle clearing for global planning
-        # Prevents phantom obstacles from persisting in global costmap
-        plugin: "nav2_costmap_2d::ObstacleLayer"
+      # obstacle_layer:
+      #   # plugin: Implementation for 2D laser scan obstacle detection in global costmap
+      #   # Expected: "nav2_costmap_2d::ObstacleLayer" (standard 2D implementation)
+      #   # Impact: Provides real-time obstacle clearing for global planning
+      #   # Prevents phantom obstacles from persisting in global costmap
+      #   plugin: "nav2_costmap_2d::ObstacleLayer"
         
-        # enabled: Whether this layer contributes to global costmap
-        # Expected: true/false
-        # Impact: true = enables real-time clearing of dynamic obstacles
-        # Essential for clearing phantom obstacles without waiting for SLAM updates
-        enabled: True
+      #   # enabled: Whether this layer contributes to global costmap
+      #   # Expected: true/false
+      #   # Impact: true = enables real-time clearing of dynamic obstacles
+      #   # Essential for clearing phantom obstacles without waiting for SLAM updates
+      #   enabled: True
         
-        # observation_sources: List of sensor sources for global obstacle data
-        # Expected: List of sensor source names (configured below)
-        # Impact: Each source provides obstacle information for global clearing
-        # "scan" refers to the laser scan configuration below
-        observation_sources: scan
+      #   # observation_sources: List of sensor sources for global obstacle data
+      #   # Expected: List of sensor source names (configured below)
+      #   # Impact: Each source provides obstacle information for global clearing
+      #   # "scan" refers to the laser scan configuration below
+      #   observation_sources: scan
         
-        # ============================================================================
-        # GLOBAL LASER SCAN SOURCE CONFIGURATION
-        # ============================================================================
-        # Configuration for processing laser scan data in global costmap
+      #   # ============================================================================
+      #   # GLOBAL LASER SCAN SOURCE CONFIGURATION
+      #   # ============================================================================
+      #   # Configuration for processing laser scan data in global costmap
         
-        scan:
-          # topic: ROS topic name for laser scan data
-          # Expected: Valid ROS topic name matching lidar publisher
-          # Impact: Must match actual laser scan topic from sensor
-          # /scan_restamped indicates timestamp correction applied
-          topic: /scan_restamped
+      #   scan:
+      #     # topic: ROS topic name for laser scan data
+      #     # Expected: Valid ROS topic name matching lidar publisher
+      #     # Impact: Must match actual laser scan topic from sensor
+      #     # /scan_restamped indicates timestamp correction applied
+      #     topic: /scan_restamped
           
-          # clearing: Whether this sensor clears obstacles from global costmap
-          # Expected: true/false
-          # Impact: true = clear phantom obstacles robot passes through
-          # Essential for removing dynamic obstacles from global planning
-          clearing: True
+      #     # clearing: Whether this sensor clears obstacles from global costmap
+      #     # Expected: true/false
+      #     # Impact: true = clear phantom obstacles robot passes through
+      #     # Essential for removing dynamic obstacles from global planning
+      #     clearing: True
           
-          # marking: Whether this sensor marks obstacles in global costmap
-          # Expected: true/false
-          # Impact: false = only clears phantom obstacles, doesn't add temporary ones
-          # Keeps global costmap stable by not marking every temporary obstacle
-          marking: False
+      #     # marking: Whether this sensor marks obstacles in global costmap
+      #     # Expected: true/false
+      #     # Impact: false = only clears phantom obstacles, doesn't add temporary ones
+      #     # Keeps global costmap stable by not marking every temporary obstacle
+      #     marking: False
           
-          # data_type: Type of sensor data being processed
-          # Expected: "LaserScan", "PointCloud2", "DepthCamera"
-          # Impact: Determines parsing and processing algorithms
-          # "LaserScan" for standard 2D lidar data
-          data_type: "LaserScan"
+      #     # data_type: Type of sensor data being processed
+      #     # Expected: "LaserScan", "PointCloud2", "DepthCamera"
+      #     # Impact: Determines parsing and processing algorithms
+      #     # "LaserScan" for standard 2D lidar data
+      #     data_type: "LaserScan"
           
-          # inf_is_valid: Whether infinite range readings are considered valid
-          # Expected: true/false
-          # Impact: true = use infinite readings for clearing, false = ignore them
-          # true allows proper clearing in open areas
-          inf_is_valid: True
+      #     # inf_is_valid: Whether infinite range readings are considered valid
+      #     # Expected: true/false
+      #     # Impact: true = use infinite readings for clearing, false = ignore them
+      #     # true allows proper clearing in open areas
+      #     inf_is_valid: True
           
-          # raytrace_max_range: Maximum range for clearing rays (meters)
-          # Expected: 2.0-6.0 (conservative for global stability)
-          # Impact: Higher values = clear obstacles at greater distance
-          # 4.0m conservative clearing range for immediate phantom obstacles only
-          raytrace_max_range: 4.0
+      #     # raytrace_max_range: Maximum range for clearing rays (meters)
+      #     # Expected: 2.0-6.0 (conservative for global stability)
+      #     # Impact: Higher values = clear obstacles at greater distance
+      #     # 4.0m conservative clearing range for immediate phantom obstacles only
+      #     raytrace_max_range: 4.0
           
-          # raytrace_min_range: Minimum range for clearing rays (meters)
-          # Expected: 0.0-0.1 (very close to sensor)
-          # Impact: Prevents clearing very close to sensor
-          # 0.05m avoids clearing sensor mounting area
-          raytrace_min_range: 0.05
+      #     # raytrace_min_range: Minimum range for clearing rays (meters)
+      #     # Expected: 0.0-0.1 (very close to sensor)
+      #     # Impact: Prevents clearing very close to sensor
+      #     # 0.05m avoids clearing sensor mounting area
+      #     raytrace_min_range: 0.05
           
-          # obstacle_max_range: Maximum range to mark obstacles (meters)
-          # Expected: 2.0-4.0 (very conservative for global planning)
-          # Impact: Not used since marking is disabled, but keeping conservative value
-          # 3.0m conservative range (not actively used since marking: False)
-          obstacle_max_range: 3.0
+      #     # obstacle_max_range: Maximum range to mark obstacles (meters)
+      #     # Expected: 2.0-4.0 (very conservative for global planning)
+      #     # Impact: Not used since marking is disabled, but keeping conservative value
+      #     # 3.0m conservative range (not actively used since marking: False)
+      #     obstacle_max_range: 3.0
           
-          # obstacle_min_range: Minimum range to mark obstacles (meters)
-          # Expected: 0.0-0.2 (avoid sensor dead zone)
-          # Impact: Prevents marking obstacles too close to sensor
-          # 0.05m avoids sensor mount and very close reflections
-          obstacle_min_range: 0.05
+      #     # obstacle_min_range: Minimum range to mark obstacles (meters)
+      #     # Expected: 0.0-0.2 (avoid sensor dead zone)
+      #     # Impact: Prevents marking obstacles too close to sensor
+      #     # 0.05m avoids sensor mount and very close reflections
+      #     obstacle_min_range: 0.05
           
-          # observation_persistence: How long to keep obstacle observations (seconds)
-          # Expected: 5.0-15.0 (much longer than local for global stability)
-          # Impact: Higher values = obstacles persist longer (more stable global planning)
-          # 10.0s provides high stability while still allowing phantom obstacle clearing
-          observation_persistence: 10.0
+      #     # observation_persistence: How long to keep obstacle observations (seconds)
+      #     # Expected: 5.0-15.0 (much longer than local for global stability)
+      #     # Impact: Higher values = obstacles persist longer (more stable global planning)
+      #     # 10.0s provides high stability while still allowing phantom obstacle clearing
+      #     observation_persistence: 10.0
           
-          # expected_update_rate: Expected sensor update frequency (Hz)
-          # Expected: Sensor's actual update rate (e.g., 10-20 Hz)
-          # Impact: Used for timeout detection of stale sensor data
-          # 10.0Hz enables timeout detection while accommodating WebRTC variability
-          expected_update_rate: 10.0
+      #     # expected_update_rate: Expected sensor update frequency (Hz)
+      #     # Expected: Sensor's actual update rate (e.g., 10-20 Hz)
+      #     # Impact: Used for timeout detection of stale sensor data
+      #     # 10.0Hz enables timeout detection while accommodating WebRTC variability
+      #     expected_update_rate: 10.0
           
-          # min_obstacle_height: Minimum height to consider as obstacle (meters)
-          # Expected: 0.0-0.3 (depends on what robot should avoid)
-          # Impact: Higher values = ignore low obstacles robot can pass over
-          # 0.0 = mark all detected obstacles regardless of height
-          min_obstacle_height: 0.0
+      #     # min_obstacle_height: Minimum height to consider as obstacle (meters)
+      #     # Expected: 0.0-0.3 (depends on what robot should avoid)
+      #     # Impact: Higher values = ignore low obstacles robot can pass over
+      #     # 0.0 = mark all detected obstacles regardless of height
+      #     min_obstacle_height: 0.0
           
-          # max_obstacle_height: Maximum height to consider as obstacle (meters)
-          # Expected: 1.0-3.0 (depends on sensor and environment)
-          # Impact: Higher values = consider taller obstacles
-          # 2.0m handles typical indoor obstacle heights
-          max_obstacle_height: 2.0
+      #     # max_obstacle_height: Maximum height to consider as obstacle (meters)
+      #     # Expected: 1.0-3.0 (depends on sensor and environment)
+      #     # Impact: Higher values = consider taller obstacles
+      #     # 2.0m handles typical indoor obstacle heights
+      #     max_obstacle_height: 2.0
 
       # ============================================================================
       # COMMENTED/DISABLED LAYER OPTIONS
