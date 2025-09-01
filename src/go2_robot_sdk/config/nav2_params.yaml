@@ -1248,7 +1248,7 @@ local_costmap:
       # Expected: true/false
       # Impact: true = full ray-tracing/clearing every update, false = incremental only
       # true forces continuous obstacle clearing instead of reactive clearing
-      always_send_full_costmap: True             # Force continuous obstacle clearing
+      # always_send_full_costmap: True             # Force continuous obstacle clearing
       
       # ============================================================================
       # COMMENTED/DISABLED LAYER OPTIONS
@@ -1648,7 +1648,7 @@ global_costmap:
       # Expected: true/false
       # Impact: true = full ray-tracing/clearing every update, false = incremental only
       # true forces continuous phantom obstacle clearing instead of reactive clearing
-      always_send_full_costmap: True             # Force continuous phantom obstacle clearing
+      # always_send_full_costmap: True             # Force continuous phantom obstacle clearing
 
 
       # ============================================================================
