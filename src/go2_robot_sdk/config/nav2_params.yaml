@@ -1762,8 +1762,8 @@ global_costmap:
           # expected_update_rate: Expected sensor update frequency (Hz)
           # Expected: Sensor's actual update rate (e.g., 10-20 Hz)
           # Impact: Used for timeout detection of stale sensor data
-          # 10.0Hz enables timeout detection while accommodating WebRTC variability
-          expected_update_rate: 10.0
+          # DISABLED: Timeout detection conflicting with 3Hz global costmap update rate
+          # expected_update_rate: 10.0
           
           # min_obstacle_height: Minimum height to consider as obstacle (meters)
           # Expected: 0.0-0.3 (depends on what robot should avoid)
