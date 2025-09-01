@@ -1730,10 +1730,10 @@ global_costmap:
           raytrace_min_range: 0.05
           
           # obstacle_max_range: Maximum range to mark obstacles (meters)
-          # Expected: 2.0-4.0 (very conservative for global planning)
-          # Impact: Not used since marking is disabled, but keeping conservative value
-          # 3.0m conservative range (not actively used since marking: False)
-          obstacle_max_range: 3.0
+          # Expected: 2.0-6.0 (should match local costmap for consistency)
+          # Impact: Higher values = detect obstacles at greater distance for global planning
+          # 6.0m matches clearing range and provides long-range obstacle detection
+          obstacle_max_range: 6.0
           
           # obstacle_min_range: Minimum range to mark obstacles (meters)
           # Expected: 0.0-0.2 (avoid sensor dead zone)

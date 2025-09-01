@@ -149,10 +149,10 @@ collision_monitor:
       action_type: "approach"                  # Gradual approach allowing Nav2 replanning
       
       # approach_time_allowance: Time allowed for approach behavior before stopping (seconds)
-      # Expected: 1.0-5.0 (time to allow gradual slowdown and Nav2 replanning)
+      # Expected: 0.5-2.0 (balance replanning opportunity with emergency response)
       # Impact: Longer time = more opportunity for replanning, shorter = faster emergency stop
-      # 2.0s gives Nav2 reasonable time to detect obstacle and replan path
-      approach_time_allowance: 2.0             # Time for Nav2 to replan before emergency stop
+      # 0.5s provides fast emergency response while allowing brief replanning window
+      approach_time_allowance: 0.5             # Fast emergency response for sudden obstacles
       
       # points: Backup polygon points if footprint_topic fails (Go2 dimensions with approach margin)
       # Expected: String containing array of [x,y] coordinates in meters, relative to robot center
