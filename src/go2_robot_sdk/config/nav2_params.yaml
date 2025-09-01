@@ -919,8 +919,8 @@ controller_server:
         # cost_weight: Importance of obstacle avoidance
         # Expected: 3.0-8.0 (very important for safety)
         # Impact: Higher weight = stronger obstacle avoidance
-        # 3.81 provides strong obstacle avoidance balanced with other objectives
-        cost_weight: 3.81                        # Strong obstacle avoidance
+        # 5.5 provides stronger obstacle avoidance competitive with other critics
+        cost_weight: 5.5                         # Stronger obstacle avoidance - competitive with other critics
         
         # critical_cost: Costmap value considered critically dangerous
         # Expected: 200-400 (depends on costmap scaling)
@@ -960,8 +960,8 @@ controller_server:
         # cost_weight: Importance of path direction alignment
         # Expected: 8.0-15.0 (high importance for path following)
         # Impact: Higher weight = stronger preference for path direction
-        # 10.0 provides strong path alignment while allowing obstacle avoidance
-        cost_weight: 6.0                        # Strong path alignment preference
+        # 7.0 provides moderate path alignment allowing some lateral deviation
+        cost_weight: 7.0                         # Moderate path alignment - allows some deviation
         
         # max_path_occupancy_ratio: Maximum obstacle occupancy on path before disabling
         # Expected: 0.01-0.1 (very low tolerance for blocked paths)
@@ -1001,8 +1001,8 @@ controller_server:
         # cost_weight: Importance of staying close to path
         # Expected: 3.0-8.0 (moderate to high importance)
         # Impact: Higher weight = tighter path following
-        # 5.0 provides good path following without overpowering obstacle avoidance
-        cost_weight: 5.0                         # Moderate path following priority
+        # 5.0 provides safe path following while allowing obstacle avoidance
+        cost_weight: 5.0                         # Moderate path following - maintains safe navigation
         
         # offset_from_furthest: Look-ahead distance for path following
         # Expected: 3-10 points (balance responsiveness with stability)
@@ -1518,7 +1518,8 @@ global_costmap:
       # Expected: 0.02-0.1 meters (balance detail with memory)
       # Impact: Finer resolution = more detail but larger memory/computation
       # 0.05m matches local costmap for consistent planning
-      resolution: 0.05                           # Cell resolution (5cm) - matches local costmap
+      # TODO: Identify the optimal resolution for the global costmap, or value we should use
+      resolution: 0.03                           # Cell resolution (5cm) - matches local costmap
       
       # track_unknown_space: Whether to track unexplored areas
       # Expected: true/false
@@ -1753,14 +1754,14 @@ global_costmap:
         # Impact: Higher values = global paths avoid obstacles more aggressively
         # 2.0 provides moderate global inflation (less aggressive than local)
         # cost_scaling_factor: 4.0                  # Original: strong cost scaling
-        cost_scaling_factor: 2.0                  # Reduced from 4.0 for better global planning
+        cost_scaling_factor: 5.0                  # Reduced from 4.0 for better global planning
         
         # inflation_radius: Distance to inflate obstacles for global planning (meters)
         # Expected: 0.2-1.0 (can be different from local costmap)
         # Impact: Larger radius = global paths stay further from map obstacles
         # 0.25m matches local costmap for consistent safety margins
         # inflation_radius: 0.45                    # Original: large safety margin
-        inflation_radius: 0.25                    # Reduced from 0.45 for better path options
+        inflation_radius: 0.45                    # Reduced from 0.45 for better path options
 
 # ============================================================================
 # MAP SAVER CONFIGURATION
