@@ -1603,18 +1603,18 @@ global_costmap:
       
       # static_map: Whether costmap size comes from static map
       # Expected: true (uses map dimensions), false (uses explicit width/height)
-      # Impact: true = costmap sized to match loaded map
-      # true standard for SLAM-based systems with pre-existing maps
-      static_map: True                           # Use static map as base layer
+      # Impact: false = use explicit dimensions, not constrained by tiny SLAM map
+      # false allows global costmap larger than current 7x7m SLAM map
+      static_map: False                          # Use explicit dimensions - not constrained by small SLAM map
       
-      # Map dimensions (commented out because static_map: true)
-      # width/height: Explicit costmap dimensions if static_map: false
-      # origin_x/origin_y: Costmap origin if not using static map
-      # These are overridden by static map when static_map: true
-      # width: 500                                 # Static map supplies size
-      # height: 500                                # Static map supplies size  
-      # origin_x: -250.0                           # Static map supplies origin
-      # origin_y: -250.0                           # Static map supplies origin
+      # Map dimensions (explicit sizing for dynamic global costmap)
+      # width/height: Explicit costmap dimensions for long-range planning
+      # origin_x/origin_y: Costmap origin centered on robot start position
+      # Large enough to handle 30m LiDAR range and extensive exploration
+      width: 800                                 # 40m x 40m global costmap (800 cells x 0.05m resolution)
+      height: 800                                # 40m x 40m global costmap
+      origin_x: -20.0                            # Center the costmap (-20m to +20m)  
+      origin_y: -20.0                            # Center the costmap (-20m to +20m)
       
       # ============================================================================
       # ROBOT FOOTPRINT (same as local costmap)
@@ -1635,27 +1635,18 @@ global_costmap:
       # plugins: List of active costmap layers (order matters)
       # Expected: Array of layer names configured below
       # Impact: Each layer adds different types of obstacles/costs
-      # static_layer for map data, obstacle_layer for real-time clearing, inflation_layer for safety margins
-      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]  # Active costmap layers
+      # obstacle_layer for real-time detection/clearing, inflation_layer for safety margins
+      plugins: ["obstacle_layer", "inflation_layer"]  # Dynamic costmap layers (no static map)
 
 
       # ============================================================================
-      # STATIC LAYER CONFIGURATION
+      # STATIC LAYER CONFIGURATION (DISABLED)
       # ============================================================================
-      # Loads pre-built static map as base layer for global planning
+      # Static layer disabled - using dynamic costmap with explicit dimensions
       
-      static_layer:
-        # plugin: Static map loading implementation
-        # Expected: "nav2_costmap_2d::StaticLayer" (standard static map handler)
-        # Impact: Loads and maintains static map data as costmap base
-        # Essential for navigation in mapped environments
-        plugin: "nav2_costmap_2d::StaticLayer"   # Static map layer
-        
-        # map_subscribe_transient_local: QoS setting for map topic subscription
-        # Expected: true/false
-        # Impact: true = reliable delivery for map data, false = best-effort
-        # true ensures map data is reliably received even with timing issues
-        map_subscribe_transient_local: True      # Use transient local QoS for reliability
+      # static_layer:
+        # plugin: "nav2_costmap_2d::StaticLayer"   # DISABLED - no static map
+        # map_subscribe_transient_local: True      # DISABLED - no static map
 
       # ============================================================================
       # GLOBAL OBSTACLE LAYER CONFIGURATION
