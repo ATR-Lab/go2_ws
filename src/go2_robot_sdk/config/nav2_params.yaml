@@ -1636,8 +1636,7 @@ global_costmap:
       # Expected: Array of layer names configured below
       # Impact: Each layer adds different types of obstacles/costs
       # static_layer for map data, obstacle_layer for real-time clearing, inflation_layer for safety margins
-      # plugins: ["static_layer", "obstacle_layer", "inflation_layer"]  # Active costmap layers
-      plugins: ["static_layer", "inflation_layer"]  # Active costmap layers
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]  # Active costmap layers
 
 
       # ============================================================================
@@ -1663,108 +1662,108 @@ global_costmap:
       # ============================================================================
       # Real-time obstacle detection and clearing for global costmap
       
-      # obstacle_layer:
-      #   # plugin: Implementation for 2D laser scan obstacle detection in global costmap
-      #   # Expected: "nav2_costmap_2d::ObstacleLayer" (standard 2D implementation)
-      #   # Impact: Provides real-time obstacle clearing for global planning
-      #   # Prevents phantom obstacles from persisting in global costmap
-      #   plugin: "nav2_costmap_2d::ObstacleLayer"
+      obstacle_layer:
+        # plugin: Implementation for 2D laser scan obstacle detection in global costmap
+        # Expected: "nav2_costmap_2d::ObstacleLayer" (standard 2D implementation)
+        # Impact: Provides real-time obstacle clearing for global planning
+        # Prevents phantom obstacles from persisting in global costmap
+        plugin: "nav2_costmap_2d::ObstacleLayer"
         
-      #   # enabled: Whether this layer contributes to global costmap
-      #   # Expected: true/false
-      #   # Impact: true = enables real-time clearing of dynamic obstacles
-      #   # Essential for clearing phantom obstacles without waiting for SLAM updates
-      #   enabled: True
+        # enabled: Whether this layer contributes to global costmap
+        # Expected: true/false
+        # Impact: true = enables real-time clearing of dynamic obstacles
+        # Essential for clearing phantom obstacles without waiting for SLAM updates
+        enabled: True
         
-      #   # observation_sources: List of sensor sources for global obstacle data
-      #   # Expected: List of sensor source names (configured below)
-      #   # Impact: Each source provides obstacle information for global clearing
-      #   # "scan" refers to the laser scan configuration below
-      #   observation_sources: scan
+        # observation_sources: List of sensor sources for global obstacle data
+        # Expected: List of sensor source names (configured below)
+        # Impact: Each source provides obstacle information for global clearing
+        # "scan" refers to the laser scan configuration below
+        observation_sources: scan
         
-      #   # ============================================================================
-      #   # GLOBAL LASER SCAN SOURCE CONFIGURATION
-      #   # ============================================================================
-      #   # Configuration for processing laser scan data in global costmap
+        # ============================================================================
+        # GLOBAL LASER SCAN SOURCE CONFIGURATION
+        # ============================================================================
+        # Configuration for processing laser scan data in global costmap
         
-      #   scan:
-      #     # topic: ROS topic name for laser scan data
-      #     # Expected: Valid ROS topic name matching lidar publisher
-      #     # Impact: Must match actual laser scan topic from sensor
-      #     # /scan_restamped indicates timestamp correction applied
-      #     topic: /scan_restamped
+        scan:
+          # topic: ROS topic name for laser scan data
+          # Expected: Valid ROS topic name matching lidar publisher
+          # Impact: Must match actual laser scan topic from sensor
+          # /scan_restamped indicates timestamp correction applied
+          topic: /scan_restamped
           
-      #     # clearing: Whether this sensor clears obstacles from global costmap
-      #     # Expected: true/false
-      #     # Impact: true = clear phantom obstacles robot passes through
-      #     # Essential for removing dynamic obstacles from global planning
-      #     clearing: True
+          # clearing: Whether this sensor clears obstacles from global costmap
+          # Expected: true/false
+          # Impact: true = clear phantom obstacles robot passes through
+          # Essential for removing dynamic obstacles from global planning
+          clearing: True
           
-      #     # marking: Whether this sensor marks obstacles in global costmap
-      #     # Expected: true/false
-      #     # Impact: false = only clears phantom obstacles, doesn't add temporary ones
-      #     # Keeps global costmap stable by not marking every temporary obstacle
-      #     marking: False
+          # marking: Whether this sensor marks obstacles in global costmap
+          # Expected: true/false
+          # Impact: true = mark new obstacles for global planner to see and replan around
+          # Essential for dynamic obstacle detection and replanning
+          marking: True
           
-      #     # data_type: Type of sensor data being processed
-      #     # Expected: "LaserScan", "PointCloud2", "DepthCamera"
-      #     # Impact: Determines parsing and processing algorithms
-      #     # "LaserScan" for standard 2D lidar data
-      #     data_type: "LaserScan"
+          # data_type: Type of sensor data being processed
+          # Expected: "LaserScan", "PointCloud2", "DepthCamera"
+          # Impact: Determines parsing and processing algorithms
+          # "LaserScan" for standard 2D lidar data
+          data_type: "LaserScan"
           
-      #     # inf_is_valid: Whether infinite range readings are considered valid
-      #     # Expected: true/false
-      #     # Impact: true = use infinite readings for clearing, false = ignore them
-      #     # true allows proper clearing in open areas
-      #     inf_is_valid: True
+          # inf_is_valid: Whether infinite range readings are considered valid
+          # Expected: true/false
+          # Impact: true = use infinite readings for clearing, false = ignore them
+          # true allows proper clearing in open areas
+          inf_is_valid: True
           
-      #     # raytrace_max_range: Maximum range for clearing rays (meters)
-      #     # Expected: 2.0-6.0 (conservative for global stability)
-      #     # Impact: Higher values = clear obstacles at greater distance
-      #     # 4.0m conservative clearing range for immediate phantom obstacles only
-      #     raytrace_max_range: 4.0
+          # raytrace_max_range: Maximum range for clearing rays (meters)
+          # Expected: 2.0-6.0 (conservative for global stability)
+          # Impact: Higher values = clear obstacles at greater distance
+          # 4.0m conservative clearing range for immediate phantom obstacles only
+          raytrace_max_range: 4.0
           
-      #     # raytrace_min_range: Minimum range for clearing rays (meters)
-      #     # Expected: 0.0-0.1 (very close to sensor)
-      #     # Impact: Prevents clearing very close to sensor
-      #     # 0.05m avoids clearing sensor mounting area
-      #     raytrace_min_range: 0.05
+          # raytrace_min_range: Minimum range for clearing rays (meters)
+          # Expected: 0.0-0.1 (very close to sensor)
+          # Impact: Prevents clearing very close to sensor
+          # 0.05m avoids clearing sensor mounting area
+          raytrace_min_range: 0.05
           
-      #     # obstacle_max_range: Maximum range to mark obstacles (meters)
-      #     # Expected: 2.0-4.0 (very conservative for global planning)
-      #     # Impact: Not used since marking is disabled, but keeping conservative value
-      #     # 3.0m conservative range (not actively used since marking: False)
-      #     obstacle_max_range: 3.0
+          # obstacle_max_range: Maximum range to mark obstacles (meters)
+          # Expected: 2.0-4.0 (very conservative for global planning)
+          # Impact: Not used since marking is disabled, but keeping conservative value
+          # 3.0m conservative range (not actively used since marking: False)
+          obstacle_max_range: 3.0
           
-      #     # obstacle_min_range: Minimum range to mark obstacles (meters)
-      #     # Expected: 0.0-0.2 (avoid sensor dead zone)
-      #     # Impact: Prevents marking obstacles too close to sensor
-      #     # 0.05m avoids sensor mount and very close reflections
-      #     obstacle_min_range: 0.05
+          # obstacle_min_range: Minimum range to mark obstacles (meters)
+          # Expected: 0.0-0.2 (avoid sensor dead zone)
+          # Impact: Prevents marking obstacles too close to sensor
+          # 0.05m avoids sensor mount and very close reflections
+          obstacle_min_range: 0.05
           
-      #     # observation_persistence: How long to keep obstacle observations (seconds)
-      #     # Expected: 5.0-15.0 (much longer than local for global stability)
-      #     # Impact: Higher values = obstacles persist longer (more stable global planning)
-      #     # 10.0s provides high stability while still allowing phantom obstacle clearing
-      #     observation_persistence: 10.0
+          # observation_persistence: How long to keep obstacle observations (seconds)
+          # Expected: 5.0-15.0 (much longer than local for global stability)
+          # Impact: Higher values = obstacles persist longer (more stable global planning)
+          # 10.0s provides high stability while still allowing phantom obstacle clearing
+          observation_persistence: 10.0
           
-      #     # expected_update_rate: Expected sensor update frequency (Hz)
-      #     # Expected: Sensor's actual update rate (e.g., 10-20 Hz)
-      #     # Impact: Used for timeout detection of stale sensor data
-      #     # 10.0Hz enables timeout detection while accommodating WebRTC variability
-      #     expected_update_rate: 10.0
+          # expected_update_rate: Expected sensor update frequency (Hz)
+          # Expected: Sensor's actual update rate (e.g., 10-20 Hz)
+          # Impact: Used for timeout detection of stale sensor data
+          # 10.0Hz enables timeout detection while accommodating WebRTC variability
+          expected_update_rate: 10.0
           
-      #     # min_obstacle_height: Minimum height to consider as obstacle (meters)
-      #     # Expected: 0.0-0.3 (depends on what robot should avoid)
-      #     # Impact: Higher values = ignore low obstacles robot can pass over
-      #     # 0.0 = mark all detected obstacles regardless of height
-      #     min_obstacle_height: 0.0
+          # min_obstacle_height: Minimum height to consider as obstacle (meters)
+          # Expected: 0.0-0.3 (depends on what robot should avoid)
+          # Impact: Higher values = ignore low obstacles robot can pass over
+          # 0.0 = mark all detected obstacles regardless of height
+          min_obstacle_height: 0.0
           
-      #     # max_obstacle_height: Maximum height to consider as obstacle (meters)
-      #     # Expected: 1.0-3.0 (depends on sensor and environment)
-      #     # Impact: Higher values = consider taller obstacles
-      #     # 2.0m handles typical indoor obstacle heights
-      #     max_obstacle_height: 2.0
+          # max_obstacle_height: Maximum height to consider as obstacle (meters)
+          # Expected: 1.0-3.0 (depends on sensor and environment)
+          # Impact: Higher values = consider taller obstacles
+          # 2.0m handles typical indoor obstacle heights
+          max_obstacle_height: 2.0
 
       # ============================================================================
       # COMMENTED/DISABLED LAYER OPTIONS
