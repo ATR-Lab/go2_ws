@@ -1720,8 +1720,8 @@ global_costmap:
           # raytrace_max_range: Maximum range for clearing rays (meters)
           # Expected: 2.0-6.0 (conservative for global stability)
           # Impact: Higher values = clear obstacles at greater distance
-          # 4.0m conservative clearing range for immediate phantom obstacles only
-          raytrace_max_range: 4.0
+          # 6.0m more aggressive clearing range to prevent phantom obstacles
+          raytrace_max_range: 6.0
           
           # raytrace_min_range: Minimum range for clearing rays (meters)
           # Expected: 0.0-0.1 (very close to sensor)
@@ -1742,10 +1742,10 @@ global_costmap:
           obstacle_min_range: 0.05
           
           # observation_persistence: How long to keep obstacle observations (seconds)
-          # Expected: 5.0-15.0 (much longer than local for global stability)
+          # Expected: 2.0-5.0 (balance stability with dynamic clearing)
           # Impact: Higher values = obstacles persist longer (more stable global planning)
-          # 10.0s provides high stability while still allowing phantom obstacle clearing
-          observation_persistence: 10.0
+          # 2.5s provides faster clearing while maintaining reasonable stability
+          observation_persistence: 2.5
           
           # expected_update_rate: Expected sensor update frequency (Hz)
           # Expected: Sensor's actual update rate (e.g., 10-20 Hz)
