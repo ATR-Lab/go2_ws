@@ -1558,14 +1558,14 @@ global_costmap:
       # update_frequency: How often to recalculate global costmap (Hz)
       # Expected: 1-20Hz (much lower than local costmap acceptable)
       # Impact: Higher frequency = more responsive but higher computational cost
-      # 3.0Hz optimized for CPU efficiency - reduced from 19Hz to free resources for obstacle detection
-      update_frequency: 3.0                      # Low frequency for CPU efficiency
+      # 10.0Hz increased for fast phantom obstacle clearing - matches sensor rate
+      update_frequency: 10.0                     # High frequency for fast obstacle clearing
       
       # publish_frequency: How often to publish global costmap data (Hz)  
       # Expected: 1-20Hz (balance data bandwidth with utility)
       # Impact: Higher frequency = more data but more responsive planning
-      # 3.0Hz matches update frequency for consistent data flow - reduced from 19Hz
-      publish_frequency: 3.0                     # Low frequency for CPU efficiency
+      # 5.0Hz balances responsiveness with bandwidth - moderate frequency for fast clearing
+      publish_frequency: 5.0                     # Moderate frequency for responsive clearing
       
       # ============================================================================
       # COORDINATE FRAMES
@@ -1760,10 +1760,10 @@ global_costmap:
           observation_persistence: 2.5
           
           # expected_update_rate: Expected sensor update frequency (Hz)
-          # Expected: Should match global costmap update_frequency for timeout prevention
+          # Expected: Sensor's actual update rate (should match increased processing rate)
           # Impact: Used for timeout detection of stale sensor data
-          # 3.0Hz matches global costmap processing rate - prevents false timeouts
-          expected_update_rate: 3.0
+          # 10.0Hz matches increased global costmap processing for fast obstacle clearing
+          expected_update_rate: 10.0
           
           # min_obstacle_height: Minimum height to consider as obstacle (meters)
           # Expected: 0.0-0.3 (depends on what robot should avoid)
