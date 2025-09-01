@@ -713,7 +713,7 @@ controller_server:
       # Expected: 0.2-1.0 (typically less than forward velocity)
       # Impact: Higher values = faster strafing capability
       # 0.2 m/s conservative (Go2 can do 0.5+ m/s lateral)
-      vy_max: 0.2                                # Maximum Y velocity - Go2's lateral capability underutilized, can do 0.5+ m/s
+      vy_max: 0.4                                # Maximum Y velocity - Go2's lateral capability underutilized, can do 0.5+ m/s
       
       # wz_max: Maximum angular velocity (rad/s)
       # Expected: 1.0-4.0 (balance agility with stability)
@@ -903,7 +903,7 @@ controller_server:
         # Expected: 5.0-15.0 (strong preference prevents unwanted reversing)
         # Impact: Higher weight = stronger bias against reverse motion
         # 8.0 provides strong forward preference while allowing necessary reversing
-        cost_weight: 8.0                         # Strong preference for forward motion
+        cost_weight: 5.0                         # Strong preference for forward motion
         
         # threshold_to_consider: Distance from goal where forward preference applies
         # Expected: 0.3-1.0 (disable near goal to allow final positioning)
@@ -961,7 +961,7 @@ controller_server:
         # Expected: 8.0-15.0 (high importance for path following)
         # Impact: Higher weight = stronger preference for path direction
         # 10.0 provides strong path alignment while allowing obstacle avoidance
-        cost_weight: 10.0                        # Strong path alignment preference
+        cost_weight: 6.0                        # Strong path alignment preference
         
         # max_path_occupancy_ratio: Maximum obstacle occupancy on path before disabling
         # Expected: 0.01-0.1 (very low tolerance for blocked paths)
@@ -1069,13 +1069,13 @@ local_costmap:
       # Expected: 5-50Hz (balance responsiveness with CPU load)
       # Impact: Higher frequency = more responsive but higher computational cost
       # 15Hz balanced for larger costmap size and WebRTC latency
-      update_frequency: 15.0                     # Optimized for larger costmap and WebRTC latency
+      update_frequency: 19.0                     # Optimized for larger costmap and WebRTC latency
       
       # publish_frequency: How often to publish costmap data (Hz)
       # Expected: 5-50Hz (usually matches or is less than update_frequency)
       # Impact: Higher frequency = more data bandwidth but more responsive control
       # 12Hz optimized for WebRTC bandwidth and responsive control
-      publish_frequency: 12.0                    # Optimized for WebRTC bandwidth efficiency
+      publish_frequency: 19.0                    # Optimized for WebRTC bandwidth efficiency
       
       # ============================================================================
       # COORDINATE FRAMES AND TIMING
@@ -1478,13 +1478,13 @@ global_costmap:
       # Expected: 1-20Hz (much lower than local costmap acceptable)
       # Impact: Higher frequency = more responsive but higher computational cost
       # 20Hz provides responsive updates but may be high for large maps
-      update_frequency: 20.0                     # High frequency updates for dynamic mapping
+      update_frequency: 19.0                     # High frequency updates for dynamic mapping
       
       # publish_frequency: How often to publish global costmap data (Hz)  
       # Expected: 1-20Hz (balance data bandwidth with utility)
       # Impact: Higher frequency = more data but more responsive planning
       # 20Hz matches update frequency for consistent data flow
-      publish_frequency: 20.0                    # High frequency publishing
+      publish_frequency: 19.0                    # High frequency publishing
       
       # ============================================================================
       # COORDINATE FRAMES
@@ -1867,7 +1867,7 @@ planner_server:
     # Expected: 1-10Hz (balance responsiveness with computation)
     # Impact: Higher frequency = more responsive replanning but more CPU
     # 8.0Hz leverages Go2 Pro LiDAR data quality for faster replanning
-    expected_planner_frequency: 8.0             # Optimized for Go2 Pro LiDAR data quality
+    expected_planner_frequency: 12.0             # Optimized for Go2 Pro LiDAR data quality
     
     # planner_plugins: List of available path planning algorithms
     # Expected: Array of planner plugin names
