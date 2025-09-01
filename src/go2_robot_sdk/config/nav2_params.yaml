@@ -746,26 +746,26 @@ controller_server:
       # ax_max: Maximum forward/backward acceleration (m/s²)
       # Expected: 1.0-5.0 (should match robot's physical capabilities)
       # Impact: Higher values = more aggressive acceleration
-      # 3.0 m/s² appropriate for Go2's dynamic capabilities
-      ax_max: 3.0                                # Maximum X acceleration - Go2's dynamic limits
+      # 2.5 m/s² gentler for smoother obstacle approach
+      ax_max: 2.5                                # Reduced for gentler obstacle approach
       
       # ax_min: Minimum (maximum deceleration) forward/backward acceleration (m/s²)
       # Expected: Negative value, magnitude 1.0-5.0
       # Impact: More negative = more aggressive braking capability
-      # -3.0 m/s² provides good deceleration for safe stopping
-      ax_min: -3.0                               # Minimum X acceleration - deceleration capability
+      # -3.5 m/s² improved stopping capability for safety when obstacles detected
+      ax_min: -3.5                               # Enhanced stopping capability for obstacle safety
       
       # ay_max: Maximum lateral acceleration (m/s²)
       # Expected: 1.0-5.0 (typically less than forward acceleration)
       # Impact: Higher values = more aggressive lateral maneuvers
-      # 3.0 m/s² matches Go2's omnidirectional capabilities
-      ay_max: 3.0                                # Maximum Y acceleration - lateral dynamics
+      # 2.5 m/s² gentler for smoother lateral movements around obstacles
+      ay_max: 2.5                                # Reduced for gentler lateral obstacle navigation
       
       # az_max: Maximum angular acceleration (rad/s²)
       # Expected: 2.0-10.0 (depends on robot's rotational capability)
       # Impact: Higher values = faster rotational maneuvers
-      # 3.5 rad/s² appropriate for Go2's rotation dynamics
-      az_max: 3.5                                # Maximum angular acceleration - rotation dynamics
+      # 2.8 rad/s² reduced for smoother rotational movements during obstacle approach
+      az_max: 2.8                                # Reduced for smoother rotational obstacle approach
       
       # ============================================================================
       # VELOCITY LIMITS
@@ -775,8 +775,8 @@ controller_server:
       # vx_max: Maximum forward velocity (m/s)
       # Expected: 0.3-2.0 (conservative values for safety)
       # Impact: Higher values = faster navigation but less safety margin
-      # 0.5 m/s conservative for Go2 (can do 1.2+ m/s for faster operation)
-      vx_max: 0.5                                # Maximum X velocity - Go2 can safely do 1.2+ m/s for faster patrol
+      # 0.3 m/s for safer obstacle approach - gives 3.3x more clearing time
+      vx_max: 0.3                                # Reduced for safer obstacle approach and clearing
       
       # vx_min: Minimum (maximum reverse) velocity (m/s)
       # Expected: Negative value, magnitude 0.2-1.0
@@ -787,14 +787,14 @@ controller_server:
       # vy_max: Maximum lateral velocity (m/s)
       # Expected: 0.2-1.0 (typically less than forward velocity)
       # Impact: Higher values = faster strafing capability
-      # 0.2 m/s conservative (Go2 can do 0.5+ m/s lateral)
-      vy_max: 0.4                                # Maximum Y velocity - Go2's lateral capability underutilized, can do 0.5+ m/s
+      # 0.25 m/s reduced for safer lateral obstacle approach
+      vy_max: 0.25                               # Reduced for safer lateral obstacle approach
       
       # wz_max: Maximum angular velocity (rad/s)
       # Expected: 1.0-4.0 (balance agility with stability)
       # Impact: Higher values = faster turning but less stable
-      # 1.9 rad/s (~109 deg/s) provides good turning capability
-      wz_max: 1.9                                # Maximum angular velocity - Go2's turning capability
+      # 1.4 rad/s (~80 deg/s) reduced for smoother obstacle approach while maintaining responsiveness
+      wz_max: 1.4                                # Reduced for smoother obstacle approach
       
       # ============================================================================
       # NOISE PARAMETERS FOR TRAJECTORY SAMPLING
