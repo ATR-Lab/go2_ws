@@ -1365,8 +1365,8 @@ local_costmap:
           # min_obstacle_height: Minimum height to consider as obstacle (meters)
           # Expected: 0.0-0.3 (depends on what robot should avoid)
           # Impact: Higher values = ignore low obstacles robot can pass over
-          # 0.08m = Go2's step-over capability, filters out false ground detections from dirty LiDAR
-          min_obstacle_height: 0.08
+          # 0.0 = mark all detected obstacles regardless of height
+          min_obstacle_height: 0.0
           
           # max_obstacle_height: Maximum height to consider as obstacle (meters)
           # Expected: 1.0-3.0 (depends on sensor and environment)
@@ -1768,8 +1768,8 @@ global_costmap:
           # min_obstacle_height: Minimum height to consider as obstacle (meters)
           # Expected: 0.0-0.3 (depends on what robot should avoid)
           # Impact: Higher values = ignore low obstacles robot can pass over
-          # 0.08m = Go2's step-over capability, filters out false ground detections from dirty LiDAR
-          min_obstacle_height: 0.08
+          # 0.0 = mark all detected obstacles regardless of height
+          min_obstacle_height: 0.0
           
           # max_obstacle_height: Maximum height to consider as obstacle (meters)
           # Expected: 1.0-3.0 (depends on sensor and environment)
