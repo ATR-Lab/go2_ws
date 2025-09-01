@@ -1,0 +1,30 @@
+collision_monitor:
+  ros__parameters:
+    use_sim_time: false
+    base_frame_id: "base_footprint"
+    odom_frame_id: "odom"
+    cmd_vel_in_topic: "cmd_vel_smoothed"
+    cmd_vel_out_topic: "cmd_vel"
+    transform_tolerance: 0.6
+    source_timeout: 1.0
+    stop_pub_timeout: 2.0
+    
+    polygons: ["FootprintStop"]
+    observation_sources: ["scan"]
+    
+    FootprintStop:
+      type: "polygon"
+      action_type: "stop"
+      footprint_topic: "/local_costmap/published_footprint"
+      time_before_collision: 0.2
+      simulation_time_step: 0.05
+      min_points: 4
+      visualize: true
+      enabled: true
+    
+    scan:
+      type: "scan"
+      topic: "scan_restamped"
+      min_height: 0.15
+      max_height: 2.0
+      enabled: true
