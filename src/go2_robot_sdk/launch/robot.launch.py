@@ -251,7 +251,11 @@ class Go2NodeFactory:
                 name='collision_monitor',
                 output='screen',
                 condition=IfCondition(with_nav2),
-                parameters=[os.path.join(self.config.package_dir, 'config', 'collision_monitor_minimal.yaml')],
+                parameters=[os.path.join(self.config.package_dir, 'config', 'collision_monitor_params.yaml')],
+                remappings=[
+                    ('cmd_vel', 'cmd_vel_nav'),        # Input: commands from navigation controller
+                    ('cmd_vel_out', 'cmd_vel')         # Output: safe commands to robot
+                ],
                 arguments=['--ros-args', '--log-level', 'info']
             ),
             # Collision monitor lifecycle manager (auto-configure and activate)

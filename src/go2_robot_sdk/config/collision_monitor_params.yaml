@@ -23,16 +23,16 @@ collision_monitor:
     # Input/output topics for velocity command monitoring
     
     # cmd_vel_in_topic: Input velocity commands (before collision checking)
-    # Expected: Valid ROS topic name from controller/smoother
-    # Impact: Must match velocity command source for monitoring
-    # "cmd_vel_smoothed" indicates post-smoothing velocity commands
-    cmd_vel_in_topic: "cmd_vel_smoothed"       # Input velocity commands (post-smoothing)
+    # Expected: Valid ROS topic name from controller server
+    # Impact: Must intercept navigation commands for immediate collision response
+    # "cmd_vel_nav" is the actual output from Nav2 controller server
+    cmd_vel_in_topic: "cmd_vel_nav"            # Input velocity commands from navigation controller
     
     # cmd_vel_out_topic: Output velocity commands (after collision checking)
-    # Expected: Valid ROS topic name to robot's velocity controller
-    # Impact: Must match robot's velocity input topic
-    # Final velocity commands sent to robot after safety checking
-    cmd_vel_out_topic: "cmd_vel"               # Output velocity commands (post-monitoring)
+    # Expected: Valid ROS topic name to robot actuators
+    # Impact: Must send safe commands directly to robot or velocity smoother
+    # "cmd_vel" is the final topic that goes to robot actuators
+    cmd_vel_out_topic: "cmd_vel"               # Output velocity commands to robot
     
     # state_topic: Topic for publishing collision monitor status
     # Expected: Valid ROS topic name for status information
