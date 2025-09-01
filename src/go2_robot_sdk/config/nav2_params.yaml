@@ -1244,6 +1244,12 @@ local_costmap:
       plugins: ["obstacle_layer", "inflation_layer"]
       # plugins: ["voxel_layer", "inflation_layer"] # Alternative: 3D voxel representation
       
+      # always_send_full_costmap: Force complete costmap processing on every update
+      # Expected: true/false
+      # Impact: true = full ray-tracing/clearing every update, false = incremental only
+      # true forces continuous obstacle clearing instead of reactive clearing
+      always_send_full_costmap: True             # Force continuous obstacle clearing
+      
       # ============================================================================
       # COMMENTED/DISABLED LAYER OPTIONS
       # ============================================================================
@@ -1637,6 +1643,12 @@ global_costmap:
       # Impact: Each layer adds different types of obstacles/costs
       # static_layer for map data, obstacle_layer for real-time clearing, inflation_layer for safety margins
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]  # Active costmap layers
+      
+      # always_send_full_costmap: Force complete costmap processing on every update
+      # Expected: true/false
+      # Impact: true = full ray-tracing/clearing every update, false = incremental only
+      # true forces continuous phantom obstacle clearing instead of reactive clearing
+      always_send_full_costmap: True             # Force continuous phantom obstacle clearing
 
 
       # ============================================================================
