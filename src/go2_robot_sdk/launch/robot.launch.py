@@ -242,14 +242,6 @@ class Go2NodeFactory:
                     'frame_id': 'base_footprint'
                 }],
             ),
-            # Collision Monitor - safety layer for obstacle avoidance
-            Node(
-                package='nav2_collision_monitor',
-                executable='collision_monitor',
-                name='collision_monitor',
-                output='screen',
-                parameters=[self.config.config_paths['nav2']],
-            ),
         ]
     
     def create_teleop_nodes(self) -> List[Node]:
