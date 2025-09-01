@@ -219,8 +219,8 @@ amcl:
     # transform_tolerance: Tolerance for transform timestamp synchronization (seconds)
     # Expected: 0.1-1.0 (higher for systems with timing issues)
     # Impact: Higher values = more tolerance for delayed data
-    # 0.6 accounts for WebRTC communication latency
-    transform_tolerance: 0.6                        # Transform timing tolerance - accounts for WebRTC latency (~100-200ms)
+    # 1.0 provides extra buffer for WebRTC communication latency and processing delays
+    transform_tolerance: 1.0                        # Transform timing tolerance - increased buffer for WebRTC timing issues
     
     # ============================================================================
     # UPDATE THRESHOLDS
@@ -348,8 +348,8 @@ bt_navigator:
     # transform_tolerance: Transform timestamp tolerance (seconds)
     # Expected: 0.1-1.0 (higher for systems with timing issues)
     # Impact: Higher values = more tolerance for delayed transform data
-    # 0.6s accounts for WebRTC communication latency (100-200ms typical)
-    transform_tolerance: 0.6                     # Transform timing tolerance - must account for WebRTC latency
+    # 1.0s provides extra buffer for WebRTC communication latency and processing delays
+    transform_tolerance: 1.0                     # Transform timing tolerance - increased buffer for WebRTC timing issues
     
     # ============================================================================
     # BEHAVIOR TREE NODE PLUGIN LIBRARY
@@ -464,8 +464,8 @@ controller_server:
     # transform_tolerance: Transform timestamp synchronization tolerance (seconds)
     # Expected: 0.1-1.0 (higher for systems with timing variability)
     # Impact: Higher values = more tolerance for delayed sensor data
-    # 0.6s accommodates WebRTC latency variations (100-300ms typical)
-    transform_tolerance: 0.6                     # Transform synchronization tolerance
+    # 1.0s provides extra buffer for WebRTC latency variations and processing delays
+    transform_tolerance: 1.0                     # Transform synchronization tolerance
     
     # controller_frequency: Control loop execution frequency (Hz)
     # Expected: 10-50Hz (balance responsiveness with computational load)
@@ -757,8 +757,8 @@ controller_server:
       # transform_tolerance: Transform timing tolerance (seconds)
       # Expected: 0.1-1.0 (should match system timing characteristics)
       # Impact: Higher values = more tolerance for delayed transforms
-      # 0.6s accommodates WebRTC latency variations
-      transform_tolerance: 0.6                   # Transform timing tolerance
+      # 1.0s provides extra buffer for WebRTC latency variations and processing delays
+      transform_tolerance: 1.0                   # Transform timing tolerance
       
       # ============================================================================
       # MPPI ALGORITHM PARAMETERS
@@ -1103,8 +1103,8 @@ local_costmap:
       # transform_tolerance: Tolerance for transform synchronization (seconds)
       # Expected: 0.1-1.0 (higher for systems with timing variability)
       # Impact: Higher values = more tolerance for delayed sensor data
-      # 0.6s accommodates WebRTC latency and sensor synchronization
-      transform_tolerance: 0.6                   # TF tolerance for sensor data alignment
+      # 1.0s provides extra buffer for WebRTC latency and sensor synchronization
+      transform_tolerance: 1.0                   # TF tolerance for sensor data alignment
       
       # ============================================================================
       # COSTMAP BEHAVIOR SETTINGS
@@ -1272,8 +1272,8 @@ local_costmap:
           # observation_persistence: How long to keep obstacle observations (seconds)
           # Expected: 0.1-2.0 (balance persistence with dynamic response)
           # Impact: Higher values = obstacles persist longer (less dynamic)
-          # 0.03s leverages Go2 Pro LiDAR accuracy for rapid obstacle clearing
-          observation_persistence: 0.03
+          # 0.15s provides buffer for WebRTC timing while enabling obstacle clearing
+          observation_persistence: 0.15
           
           # expected_update_rate: Expected sensor update frequency (Hz) - DISABLED
           # Expected: Sensor's actual update rate (e.g., 10-30 Hz)
@@ -1413,8 +1413,8 @@ local_costmap:
           # observation_persistence: How long to keep voxel observations (seconds)
           # Expected: 0.05-0.5 (much shorter than global for dynamic response)
           # Impact: Higher values = obstacles persist longer (less dynamic response)
-          # 0.03s leverages Go2 Pro LiDAR accuracy for immediate dynamic response
-          observation_persistence: 0.03          # Optimized for Go2 Pro LiDAR accuracy and dynamic response
+          # 0.15s provides buffer for WebRTC timing while maintaining dynamic response
+          observation_persistence: 0.15          # Optimized for Go2 Pro LiDAR accuracy and dynamic response
           
           # expected_update_rate: Expected sensor update frequency (DISABLED)
           # Expected: Sensor's actual rate (e.g., 10-30 Hz)
@@ -1715,8 +1715,8 @@ global_costmap:
           # observation_persistence: How long to keep observations (global uses longer)
           # Expected: 0.2-2.0 (longer than local for stability)
           # Impact: Higher values = more persistent obstacles in global map
-          # 0.08s optimized for Go2 Pro LiDAR accuracy and obstacle clearing
-          observation_persistence: 0.08          # Optimized persistence for Go2 Pro LiDAR
+          # 0.25s provides stability buffer for WebRTC timing while enabling clearing
+          observation_persistence: 0.25          # Optimized persistence for Go2 Pro LiDAR
           
           # expected_update_rate: Expected sensor frequency (DISABLED)
           # Expected: Sensor's actual rate (e.g., 10-30 Hz)
@@ -1884,8 +1884,8 @@ planner_server:
     # transform_tolerance: Transform timestamp tolerance (seconds)
     # Expected: 0.1-1.0 (higher for systems with timing issues)
     # Impact: Higher values = more tolerance for delayed transform data
-    # 0.6s accommodates WebRTC communication latency
-    transform_tolerance: 0.6                    # Transform synchronization tolerance
+    # 1.0s provides extra buffer for WebRTC communication latency and processing delays
+    transform_tolerance: 1.0                    # Transform synchronization tolerance
 
     # ============================================================================
     # SMAC PLANNER 2D CONFIGURATION (GridBased)
@@ -2004,8 +2004,8 @@ behavior_server:
     # transform_tolerance: Transform timestamp tolerance (seconds)
     # Expected: 0.1-1.0 (higher for systems with timing issues)
     # Impact: Higher values = more tolerance for delayed transforms
-    # 0.6s accommodates WebRTC communication latency
-    transform_tolerance: 0.6                   # Transform timing tolerance
+    # 1.0s provides extra buffer for WebRTC communication latency and processing delays
+    transform_tolerance: 1.0                   # Transform timing tolerance
     
     # ============================================================================
     # AVAILABLE BEHAVIOR PLUGINS
