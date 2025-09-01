@@ -162,25 +162,25 @@ amcl:
     # Expected: 0.01-0.1 (lower = more accurate but slower adaptation)
     # Impact: Lower values = require more precise localization before reducing particles
     # 0.05 provides good balance between accuracy and responsiveness
-    pf_err: 0.05                                    # Particle filter error tolerance - localization confidence
+    pf_err: 0.1                                    # Particle filter error tolerance - localization confidence
     
     # pf_z: Confidence level for particle filter (quantile)
     # Expected: 0.90-0.99 (higher = more conservative)
     # Impact: Higher values = maintain more particles for safety
     # 0.99 is very conservative, good for critical applications
-    pf_z: 0.99                                      # Particle filter confidence - higher = more conservative
+    pf_z: 0.95                                      # Particle filter confidence - higher = more conservative
     
     # recovery_alpha_fast: Fast exponential decay rate for recovery
     # Expected: 0.0-0.5 (0.0 = disabled)
     # Impact: Higher values = faster recovery from localization failures
     # 0.0 disables recovery for more predictable behavior
-    recovery_alpha_fast: 0.0                        # Fast recovery parameter - disabled for stability
+    recovery_alpha_fast: 0.1                        # Fast recovery parameter - disabled for stability
     
     # recovery_alpha_slow: Slow exponential decay rate for recovery
     # Expected: 0.0-0.1 (0.0 = disabled)
     # Impact: Higher values = gradual recovery from poor localization
     # 0.0 disables slow recovery for consistent behavior
-    recovery_alpha_slow: 0.0                        # Slow recovery parameter - disabled for stability
+    recovery_alpha_slow: 0.05                        # Slow recovery parameter - disabled for stability
     
     # resample_interval: Resample particles every N updates
     # Expected: 1-5 (1 = resample every update, higher = less frequent)
@@ -1144,7 +1144,7 @@ local_costmap:
       # Expected: 0.02-0.1 meters (balance detail with memory/computation)
       # Impact: Smaller resolution = more detail but larger memory usage
       # 0.03m (3cm) leverages Go2 Pro LiDAR's 2cm accuracy for finer detail
-      resolution: 0.03                           # Cell resolution (3cm) - optimized for Go2 Pro LiDAR precision
+      resolution: 0.05                           # Cell resolution (3cm) - optimized for Go2 Pro LiDAR precision
       
       # ============================================================================
       # ROBOT FOOTPRINT DEFINITION
@@ -1279,7 +1279,7 @@ local_costmap:
           # Expected: Sensor's actual update rate (e.g., 10-30 Hz)
           # Impact: Used for timeout detection, commented out = no timeout checking
           # Disabled to avoid timeout issues with variable WebRTC latency
-          # expected_update_rate: 0.18
+          expected_update_rate: 10.0
           
           # min_obstacle_height: Minimum height to consider as obstacle (meters)
           # Expected: 0.0-0.3 (depends on what robot should avoid)
