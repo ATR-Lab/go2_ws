@@ -48,9 +48,10 @@ The `human_interaction` package is the **core AI processing component** of the r
   - `/human_detection/proximity`: Proximity information
 - **Publishes**:
   - `/interaction/state` (std_msgs/String): Current interaction state (JSON)
-  - `/interaction/commands` (std_msgs/String): Behavior commands (JSON)
+  - `/interaction/command_log` (std_msgs/String): Command execution tracking with metadata (JSON)
   - `/interaction/events` (std_msgs/String): Interaction events (JSON)
   - `/tts` (std_msgs/String): Text-to-speech requests (JSON)
+  - `/webrtc_req` (go2_interfaces/WebRtcReq): Direct robot gesture commands
 
 **Parameters**:
 - `state_timeout` (float, default: 30.0): State transition timeout (seconds)
@@ -129,9 +130,11 @@ The system manages these behavioral states with intelligent multi-human handling
 - **Context-Aware Greetings**: Recognizes returning humans and adjusts responses
 - **Human Memory**: Tracks interaction history per person (first_seen, last_interaction, total_interactions)
 - **Return Detection**: Differentiates between quick returns, short returns, and first-time visitors
-- **Command Rate Limiting**: Prevents spam with per-human, per-gesture cooldowns
+- **Command-Specific Rate Limiting**: Dynamic cooldowns based on actual robot gesture execution times (6-20 seconds)
 - **State Transition Smoothing**: Intelligent handoffs between multiple human interactions
 - **Proximity-Based Priority**: Closer humans get higher interaction priority
+- **One-Time Proximity Warnings**: Polite boundary setting without continuous retreat behavior
+- **Unified Command Pipeline**: All commands go through centralized rate limiting and execution tracking
 
 ## Data Formats
 
@@ -200,6 +203,25 @@ The system manages these behavioral states with intelligent multi-human handling
 }
 ```
 
+### Command Log Output (New)
+```json
+{
+  "command_id": "fist_bump_1_1756796588",
+  "command": "fist_bump",
+  "human_id": 1,
+  "timestamp": 1756796588.7048807,
+  "status": "success",
+  "error": null,
+  "context": {
+    "gesture": "right_fist",
+    "distance": 1.5,
+    "zone": "interaction",
+    "human_state": "ACTIVE_INTERACTION"
+  },
+  "api_id": 1016
+}
+```
+
 ## Quick Start
 
 ### 1. Basic Human Detection
@@ -222,6 +244,9 @@ ros2 run human_interaction interaction_manager_node &
 
 # Monitor interaction state
 ros2 topic echo /interaction/state
+
+# Monitor command execution and rate limiting
+ros2 topic echo /interaction/command_log
 
 # Monitor multi-human gestures
 ros2 topic echo /human_detection/combined_gestures
@@ -306,8 +331,9 @@ ros2 run human_interaction interaction_manager_node
 ### With Go2 Robot SDK
 ```bash
 # Robot provides camera feed to /camera/image_raw
-# Human interaction processes and publishes behavior commands
-# Robot SDK subscribes to /interaction/commands for behavior execution
+# Human interaction processes gestures and sends direct robot commands
+# Robot SDK receives commands via /webrtc_req for immediate execution
+# Command tracking available via /interaction/command_log
 ```
 
 ### With Speech Processing
@@ -360,9 +386,24 @@ top -p $(pgrep -f human_detection_node)
 # Monitor state transitions
 ros2 topic echo /interaction/state
 
+# Monitor command execution and rate limiting
+ros2 topic echo /interaction/command_log
+
 # Check parameter configuration
 ros2 param list /interaction_manager_node
 ros2 param get /interaction_manager_node state_timeout
+```
+
+### Command Rate Limiting Issues
+```bash
+# Monitor command execution status
+ros2 topic echo /interaction/command_log | grep -E "(rate_limited|success|failed)"
+
+# Check command-specific cooldowns (6-20 seconds based on gesture type)
+# fist_bump: 10s, happy_dance: 18s, stretch: 6s, etc.
+
+# Verify proximity warnings (should only happen once per human approach)
+ros2 topic echo /interaction/command_log | grep "step_back"
 ```
 
 ## Development
@@ -382,10 +423,11 @@ ros2 param get /interaction_manager_node state_timeout
 4. Update state machine documentation
 
 ### Custom Behavior Responses
-1. Subscribe to `/human_detection/gestures` in your node
-2. Implement gesture-specific behavior logic
-3. Publish commands to robot control topics
-4. Coordinate with interaction manager state
+1. Subscribe to `/human_detection/combined_gestures` for multi-human gesture data
+2. Implement gesture-specific behavior logic with proper rate limiting
+3. Use `/interaction/command_log` to monitor command execution status
+4. Coordinate with interaction manager state via `/interaction/state`
+5. Add new commands to `UNIFIED_COMMANDS` and `COMMAND_EXECUTION_TIMES` dictionaries
 
 ## Dependencies
 
@@ -395,6 +437,7 @@ ros2 param get /interaction_manager_node state_timeout
 - `std_msgs`: String messages for JSON data
 - `geometry_msgs`: Pose and point messages
 - `cv_bridge`: OpenCV-ROS2 integration
+- `go2_interfaces`: Go2 robot WebRTC command messages
 
 ### Python Libraries
 - `ultralytics`: YOLOv8 implementation
