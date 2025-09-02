@@ -33,6 +33,13 @@ import time
 import os
 from typing import List, Dict, Optional, Tuple
 import math
+from enum import Enum
+
+class GestureState(Enum):
+    """Gesture state enumeration"""
+    NEW = "new"
+    ONGOING = "ongoing" 
+    ENDED = "ended"
 
 # MediaPipe setup
 mp_pose = mp.solutions.pose
@@ -74,6 +81,23 @@ class HumanDetectionNode(Node):
         self.processing_frame = False
         self.camera_info = None
         self.last_detection_time = time.time()
+        
+        # Human tracking state
+        self.tracked_humans = {}  # Dict[human_id, human_data]
+        self.next_human_id = 1
+        self.max_tracking_distance = 100  # pixels
+        self.human_timeout = 3.0  # seconds
+        
+        # Gesture state management
+        self.gesture_history = []  # List of (timestamp, gestures) tuples
+        self.last_gesture_responses = {}  # Dict[human_id, Dict[gesture, timestamp]]
+        self.gesture_debounce_time = 2.0  # seconds
+        self.gesture_rate_limit = 1.0  # max 1 response per gesture per second
+        
+        # Gesture state tracking
+        self.gesture_states = {}  # Dict[human_id, Dict[gesture, GestureState]]
+        self.gesture_start_times = {}  # Dict[human_id, Dict[gesture, timestamp]]
+        self.gesture_end_timeout = 1.0  # seconds without gesture = ended
         
         # Threading for processing
         self.processing_lock = threading.Lock()
@@ -172,6 +196,13 @@ class HumanDetectionNode(Node):
             '/human_detection/pose', 
             10
         )
+        
+        # Combined gestures for interaction manager
+        self.combined_gestures_pub = self.create_publisher(
+            String,
+            '/human_detection/combined_gestures',
+            10
+        )
     
     def setup_subscribers(self):
         """Setup ROS subscribers"""
@@ -231,10 +262,13 @@ class HumanDetectionNode(Node):
                 human_detections = self.detect_humans(frame)
                 
                 # Process each detected human
+                all_gesture_results = []
+                
                 for detection in human_detections:
-                    # Extract human bounding box
+                    # Extract human data
                     bbox = detection['bbox']
                     confidence = detection['confidence']
+                    human_id = detection['id']
                     
                     # Crop human region for detailed analysis
                     human_region = self.crop_region(frame, bbox)
@@ -244,19 +278,25 @@ class HumanDetectionNode(Node):
                     if self.enable_pose and human_region is not None:
                         pose_data = self.estimate_pose(human_region)
                     
-                    # Gesture recognition
-                    gestures = None
-                    if self.enable_gestures and human_region is not None:
-                        gestures = self.recognize_gestures(human_region)
+                    # Gesture recognition (now with human attribution)
+                    gesture_result = None
+                    if self.enable_gestures:
+                        # Use full frame for gesture recognition to capture hands properly
+                        gesture_result = self.recognize_gestures(frame, human_id, bbox)
+                        all_gesture_results.append(gesture_result)
                     
                     # Calculate proximity
                     distance = self.calculate_distance(bbox, confidence)
                     zone = self.classify_zone(distance)
                     
-                    # Publish results
+                    # Publish results for this human
                     self.publish_detection_results(
-                        detection, pose_data, gestures, distance, zone, timestamp
+                        detection, pose_data, gesture_result, distance, zone, timestamp
                     )
+                
+                # Publish combined gesture results for interaction manager
+                if all_gesture_results:
+                    self.publish_combined_gestures(all_gesture_results, timestamp)
                 
                 self.last_detection_time = time.time()
                 
@@ -267,12 +307,12 @@ class HumanDetectionNode(Node):
                 self.processing_frame = False
     
     def detect_humans(self, frame: np.ndarray) -> List[Dict]:
-        """Detect humans using YOLOv8"""
+        """Detect humans using YOLOv8 with tracking"""
         try:
             # Run YOLO detection
             results = self.yolo_model(frame, verbose=False)
             
-            human_detections = []
+            raw_detections = []
             
             for result in results:
                 boxes = result.boxes
@@ -289,16 +329,96 @@ class HumanDetectionNode(Node):
                                 detection = {
                                     'bbox': [int(x1), int(y1), int(x2), int(y2)],
                                     'confidence': confidence,
-                                    'class': 'human'
+                                    'class': 'human',
+                                    'center': [int((x1 + x2) / 2), int((y1 + y2) / 2)],
+                                    'area': int((x2 - x1) * (y2 - y1))
                                 }
                                 
-                                human_detections.append(detection)
+                                raw_detections.append(detection)
             
-            return human_detections
+            # Apply human tracking to assign IDs
+            tracked_detections = self.track_humans(raw_detections)
+            
+            return tracked_detections
             
         except Exception as e:
             self.get_logger().error(f'Error in human detection: {e}')
             return []
+    
+    def track_humans(self, detections: List[Dict]) -> List[Dict]:
+        """Track humans across frames and assign consistent IDs"""
+        current_time = time.time()
+        
+        # Clean up old tracked humans
+        expired_ids = []
+        for human_id, human_data in self.tracked_humans.items():
+            if current_time - human_data['last_seen'] > self.human_timeout:
+                expired_ids.append(human_id)
+        
+        for human_id in expired_ids:
+            del self.tracked_humans[human_id]
+            # Clean up gesture history for this human
+            if human_id in self.last_gesture_responses:
+                del self.last_gesture_responses[human_id]
+            # Clean up gesture states
+            if human_id in self.gesture_states:
+                del self.gesture_states[human_id]
+            if human_id in self.gesture_start_times:
+                del self.gesture_start_times[human_id]
+        
+        tracked_detections = []
+        
+        for detection in detections:
+            detection_center = detection['center']
+            detection_area = detection['area']
+            
+            # Find best matching tracked human
+            best_match_id = None
+            best_distance = float('inf')
+            
+            for human_id, human_data in self.tracked_humans.items():
+                # Calculate distance between current detection and tracked human
+                tracked_center = human_data['center']
+                distance = math.sqrt(
+                    (detection_center[0] - tracked_center[0])**2 + 
+                    (detection_center[1] - tracked_center[1])**2
+                )
+                
+                # Consider area similarity as well
+                area_ratio = min(detection_area, human_data['area']) / max(detection_area, human_data['area'])
+                
+                # Combined matching score (distance + area similarity)
+                if distance < self.max_tracking_distance and area_ratio > 0.5:
+                    if distance < best_distance:
+                        best_distance = distance
+                        best_match_id = human_id
+            
+            if best_match_id is not None:
+                # Update existing tracked human
+                detection['id'] = best_match_id
+                self.tracked_humans[best_match_id].update({
+                    'center': detection_center,
+                    'area': detection_area,
+                    'bbox': detection['bbox'],
+                    'confidence': detection['confidence'],
+                    'last_seen': current_time
+                })
+            else:
+                # Create new tracked human
+                detection['id'] = self.next_human_id
+                self.tracked_humans[self.next_human_id] = {
+                    'center': detection_center,
+                    'area': detection_area,
+                    'bbox': detection['bbox'],
+                    'confidence': detection['confidence'],
+                    'last_seen': current_time,
+                    'first_seen': current_time
+                }
+                self.next_human_id += 1
+            
+            tracked_detections.append(detection)
+        
+        return tracked_detections
     
     def estimate_pose(self, frame: np.ndarray) -> Optional[Dict]:
         """Estimate human pose using MediaPipe"""
@@ -338,8 +458,8 @@ class HumanDetectionNode(Node):
             self.get_logger().error(f'Error in pose estimation: {e}')
             return None
     
-    def recognize_gestures(self, frame: np.ndarray) -> List[str]:
-        """Recognize hand gestures using MediaPipe"""
+    def recognize_gestures(self, frame: np.ndarray, human_id: int, human_bbox: List[int]) -> Dict:
+        """Recognize hand gestures using MediaPipe with human attribution"""
         try:
             # Convert BGR to RGB
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -352,13 +472,19 @@ class HumanDetectionNode(Node):
             
             if results.multi_hand_landmarks and results.multi_handedness:
                 for hand_landmarks, handedness in zip(results.multi_hand_landmarks, results.multi_handedness):
-                    # Get hand label (Left/Right)
-                    hand_label = handedness.classification[0].label
-                    
-                    # Analyze hand landmarks for gestures
-                    gesture = self.analyze_hand_gesture(hand_landmarks, hand_label)
-                    if gesture and gesture != "unknown":
-                        gestures.append(f"{hand_label.lower()}_{gesture}")
+                    # Check if hand is within human bounding box
+                    if self.is_hand_in_human_bbox(hand_landmarks, human_bbox, rgb_frame.shape):
+                        # Get hand label (Left/Right)
+                        hand_label = handedness.classification[0].label
+                        
+                        # Analyze hand landmarks for gestures
+                        gesture = self.analyze_hand_gesture(hand_landmarks, hand_label)
+                        if gesture and gesture != "unknown":
+                            full_gesture = f"{hand_label.lower()}_{gesture}"
+                            
+                            # Check if this gesture should be debounced
+                            if self.should_respond_to_gesture(human_id, full_gesture, current_time):
+                                gestures.append(full_gesture)
             
             # Update gesture history for temporal analysis
             if gestures:
@@ -374,13 +500,128 @@ class HumanDetectionNode(Node):
             
             # If no gestures detected, check if hands are present
             if not gestures and results.multi_hand_landmarks:
-                gestures = ["hands_visible"]
+                # Only add hands_visible if hands are in this human's bbox
+                for hand_landmarks in results.multi_hand_landmarks:
+                    if self.is_hand_in_human_bbox(hand_landmarks, human_bbox, rgb_frame.shape):
+                        gestures = ["hands_visible"]
+                        break
             
-            return list(set(gestures))  # Remove duplicates
+            # Update gesture states
+            gesture_states = self.update_gesture_states(human_id, gestures, current_time)
+            
+            return {
+                'human_id': human_id,
+                'gestures': list(set(gestures)),  # Remove duplicates
+                'gesture_states': gesture_states,
+                'timestamp': current_time
+            }
             
         except Exception as e:
             self.get_logger().error(f'Error in gesture recognition: {e}')
-            return []
+            return {'human_id': human_id, 'gestures': [], 'timestamp': current_time}
+    
+    def is_hand_in_human_bbox(self, hand_landmarks, human_bbox: List[int], frame_shape: Tuple) -> bool:
+        """Check if hand landmarks are within human bounding box"""
+        try:
+            height, width = frame_shape[:2]
+            x1, y1, x2, y2 = human_bbox
+            
+            # Get hand center from landmarks
+            hand_x = sum([lm.x for lm in hand_landmarks.landmark]) / len(hand_landmarks.landmark)
+            hand_y = sum([lm.y for lm in hand_landmarks.landmark]) / len(hand_landmarks.landmark)
+            
+            # Convert normalized coordinates to pixel coordinates
+            hand_x_px = int(hand_x * width)
+            hand_y_px = int(hand_y * height)
+            
+            # Check if hand center is within human bounding box (with some margin)
+            margin = 50  # pixels
+            return (x1 - margin <= hand_x_px <= x2 + margin and 
+                    y1 - margin <= hand_y_px <= y2 + margin)
+                    
+        except Exception as e:
+            self.get_logger().error(f'Error checking hand-human association: {e}')
+            return False
+    
+    def should_respond_to_gesture(self, human_id: int, gesture: str, current_time: float) -> bool:
+        """Check if we should respond to this gesture (debouncing)"""
+        try:
+            # Initialize gesture history for this human if needed
+            if human_id not in self.last_gesture_responses:
+                self.last_gesture_responses[human_id] = {}
+            
+            # Check if we've responded to this gesture recently
+            if gesture in self.last_gesture_responses[human_id]:
+                last_response_time = self.last_gesture_responses[human_id][gesture]
+                if current_time - last_response_time < self.gesture_debounce_time:
+                    return False  # Too soon, debounce this gesture
+            
+            # Record this gesture response
+            self.last_gesture_responses[human_id][gesture] = current_time
+            return True
+            
+        except Exception as e:
+            self.get_logger().error(f'Error in gesture debouncing: {e}')
+            return True  # Default to allowing gesture
+    
+    def update_gesture_states(self, human_id: int, current_gestures: List[str], current_time: float) -> Dict:
+        """Update gesture states for a human (NEW → ONGOING → ENDED)"""
+        try:
+            # Initialize state tracking for this human if needed
+            if human_id not in self.gesture_states:
+                self.gesture_states[human_id] = {}
+                self.gesture_start_times[human_id] = {}
+            
+            human_gesture_states = self.gesture_states[human_id]
+            human_start_times = self.gesture_start_times[human_id]
+            
+            # Track current gesture states
+            current_states = {}
+            
+            # Process current gestures
+            for gesture in current_gestures:
+                if gesture in human_gesture_states:
+                    # Gesture was already active - mark as ONGOING
+                    if human_gesture_states[gesture] == GestureState.NEW:
+                        human_gesture_states[gesture] = GestureState.ONGOING
+                        current_states[gesture] = GestureState.ONGOING
+                    else:
+                        current_states[gesture] = GestureState.ONGOING
+                else:
+                    # New gesture detected - mark as NEW
+                    human_gesture_states[gesture] = GestureState.NEW
+                    human_start_times[gesture] = current_time
+                    current_states[gesture] = GestureState.NEW
+                    self.get_logger().debug(f'NEW gesture "{gesture}" detected for human {human_id}')
+            
+            # Check for ended gestures (gestures that were active but not detected now)
+            ended_gestures = []
+            for gesture, state in list(human_gesture_states.items()):
+                if gesture not in current_gestures and state != GestureState.ENDED:
+                    # Gesture has ended
+                    human_gesture_states[gesture] = GestureState.ENDED
+                    current_states[gesture] = GestureState.ENDED
+                    ended_gestures.append(gesture)
+                    self.get_logger().debug(f'ENDED gesture "{gesture}" for human {human_id}')
+            
+            # Clean up old ended gestures (older than timeout)
+            gestures_to_remove = []
+            for gesture, state in human_gesture_states.items():
+                if (state == GestureState.ENDED and 
+                    gesture in human_start_times and
+                    current_time - human_start_times[gesture] > self.gesture_end_timeout * 3):
+                    gestures_to_remove.append(gesture)
+            
+            for gesture in gestures_to_remove:
+                del human_gesture_states[gesture]
+                if gesture in human_start_times:
+                    del human_start_times[gesture]
+            
+            return current_states
+            
+        except Exception as e:
+            self.get_logger().error(f'Error updating gesture states: {e}')
+            return {}
     
     def analyze_hand_gesture(self, landmarks, hand_label: str) -> Optional[str]:
         """Analyze hand landmarks to determine specific gesture"""
@@ -571,7 +812,7 @@ class HumanDetectionNode(Node):
             return None
     
     def publish_detection_results(self, detection: Dict, pose_data: Optional[Dict], 
-                                gestures: List[str], distance: float, zone: str, timestamp):
+                                gesture_result: Optional[Dict], distance: float, zone: str, timestamp):
         """Publish detection results to ROS topics"""
         try:
             # Publish human detection
@@ -585,13 +826,13 @@ class HumanDetectionNode(Node):
             people_msg.data = json.dumps(people_data)
             self.people_pub.publish(people_msg)
             
-            # Publish gestures
-            if gestures:
+            # Publish individual gestures for this human
+            if gesture_result and gesture_result.get('gestures'):
                 gestures_msg = String()
                 gestures_data = {
-                    'timestamp': timestamp.sec + timestamp.nanosec * 1e-9,
-                    'gestures': gestures,
-                    'detection_id': detection.get('id', 0)
+                    'timestamp': gesture_result.get('timestamp', timestamp.sec + timestamp.nanosec * 1e-9),
+                    'gestures': gesture_result['gestures'],
+                    'human_id': gesture_result['human_id']
                 }
                 gestures_msg.data = json.dumps(gestures_data)
                 self.gestures_pub.publish(gestures_msg)
@@ -626,6 +867,65 @@ class HumanDetectionNode(Node):
             
         except Exception as e:
             self.get_logger().error(f'Error publishing detection results: {e}')
+    
+    def publish_combined_gestures(self, all_gesture_results: List[Dict], timestamp):
+        """Publish combined gesture results for interaction manager"""
+        try:
+            # Create a priority-ordered list of gestures
+            prioritized_gestures = self.prioritize_gestures(all_gesture_results)
+            
+            if prioritized_gestures:
+                combined_msg = String()
+                combined_data = {
+                    'timestamp': timestamp.sec + timestamp.nanosec * 1e-9,
+                    'all_humans': all_gesture_results,
+                    'prioritized_gestures': prioritized_gestures,
+                    'total_humans': len(all_gesture_results)
+                }
+                combined_msg.data = json.dumps(combined_data)
+                # Publish to a new topic for the interaction manager
+                # We'll need to add this publisher in setup_publishers
+                if hasattr(self, 'combined_gestures_pub'):
+                    self.combined_gestures_pub.publish(combined_msg)
+                    
+        except Exception as e:
+            self.get_logger().error(f'Error publishing combined gestures: {e}')
+    
+    def prioritize_gestures(self, all_gesture_results: List[Dict]) -> List[Dict]:
+        """Prioritize gestures based on human proximity and gesture importance"""
+        try:
+            prioritized = []
+            
+            for gesture_result in all_gesture_results:
+                if gesture_result.get('gestures'):
+                    human_id = gesture_result['human_id']
+                    
+                    # Get human data for prioritization
+                    human_data = self.tracked_humans.get(human_id, {})
+                    
+                    # Calculate priority score (closer humans get higher priority)
+                    bbox = human_data.get('bbox', [0, 0, 100, 100])
+                    area = human_data.get('area', 1)
+                    confidence = human_data.get('confidence', 0.0)
+                    
+                    # Larger area (closer) and higher confidence = higher priority
+                    priority_score = area * confidence
+                    
+                    prioritized.append({
+                        'human_id': human_id,
+                        'gestures': gesture_result['gestures'],
+                        'priority_score': priority_score,
+                        'timestamp': gesture_result['timestamp']
+                    })
+            
+            # Sort by priority score (highest first)
+            prioritized.sort(key=lambda x: x['priority_score'], reverse=True)
+            
+            return prioritized
+            
+        except Exception as e:
+            self.get_logger().error(f'Error prioritizing gestures: {e}')
+            return []
 
 
 def main(args=None):
