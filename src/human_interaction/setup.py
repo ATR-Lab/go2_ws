@@ -22,7 +22,6 @@ setup(
         'console_scripts': [
             'human_detection_node = human_interaction.human_detection_node:main',
             'interaction_manager_node = human_interaction.interaction_manager_node:main',
-            'gesture_recognition_node = human_interaction.gesture_recognition_node:main',
         ],
     },
 )
