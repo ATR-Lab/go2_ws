@@ -34,6 +34,7 @@ import os
 from typing import List, Dict, Optional, Tuple
 import math
 from enum import Enum
+from boxmot import ByteTrack
 
 class GestureState(Enum):
     """Gesture state enumeration"""
@@ -82,10 +83,16 @@ class HumanDetectionNode(Node):
         self.camera_info = None
         self.last_detection_time = time.time()
         
-        # Human tracking state
-        self.tracked_humans = {}  # Dict[human_id, human_data]
-        self.next_human_id = 1
-        self.max_tracking_distance = 250  # pixels - increased for laggy video feeds
+        # ByteTrack initialization for robust human tracking
+        self.tracker = ByteTrack(
+            track_thresh=0.6,      # Higher threshold for laggy video
+            track_buffer=60,       # Longer buffer for frame gaps (frames)
+            match_thresh=0.8,      # More permissive matching for WebRTC
+            frame_rate=10          # Match our actual camera FPS
+        )
+        
+        # Human tracking state (simplified for ByteTrack)
+        self.tracked_humans = {}  # Dict[track_id, human_metadata]
         self.human_timeout = 3.0  # seconds
         
         # Gesture state management
@@ -348,8 +355,8 @@ class HumanDetectionNode(Node):
                                 
                                 raw_detections.append(detection)
             
-            # Apply human tracking to assign IDs
-            tracked_detections = self.track_humans(raw_detections)
+                            # Apply ByteTrack for robust human tracking
+                tracked_detections = self.track_humans_with_bytetrack(raw_detections, frame)
             
             return tracked_detections
             
@@ -357,136 +364,77 @@ class HumanDetectionNode(Node):
             self.get_logger().error(f'Error in human detection: {e}')
             return []
     
-    def track_humans(self, detections: List[Dict]) -> List[Dict]:
-        """Track humans across frames and assign consistent IDs"""
+    def track_humans_with_bytetrack(self, detections: List[Dict], frame: np.ndarray) -> List[Dict]:
+        """Use ByteTrack for robust human tracking across frames"""
         current_time = time.time()
         
-        # Clean up old tracked humans
-        expired_ids = []
-        for human_id, human_data in self.tracked_humans.items():
-            if current_time - human_data['last_seen'] > self.human_timeout:
-                expired_ids.append(human_id)
+        if not detections:
+            return []
         
-        for human_id in expired_ids:
-            del self.tracked_humans[human_id]
-            # Clean up gesture history for this human
-            if human_id in self.last_gesture_responses:
-                del self.last_gesture_responses[human_id]
-            # Clean up gesture states
-            if human_id in self.gesture_states:
-                del self.gesture_states[human_id]
-            if human_id in self.gesture_start_times:
-                del self.gesture_start_times[human_id]
+        # Convert our detection format to ByteTrack format
+        # ByteTrack expects: [x1, y1, x2, y2, conf, class_id]
+        bytetrack_dets = []
+        for det in detections:
+            x1, y1, x2, y2 = det['bbox']
+            conf = det['confidence']
+            class_id = 0  # Human class
+            bytetrack_dets.append([x1, y1, x2, y2, conf, class_id])
         
+        # Convert to numpy array
+        dets_array = np.array(bytetrack_dets) if bytetrack_dets else np.empty((0, 6))
+        
+        # Update ByteTrack tracker
+        # Returns: [x1, y1, x2, y2, track_id, conf, class_id, det_ind]
+        tracks = self.tracker.update(dets_array, frame)
+        
+        # Convert ByteTrack results back to our format
         tracked_detections = []
         
-        for detection in detections:
-            detection_center = detection['center']
-            detection_area = detection['area']
-            
-            # Find best matching tracked human
-            best_match_id = None
-            best_distance = float('inf')
-            
-            for human_id, human_data in self.tracked_humans.items():
-                # Calculate distance between current detection and tracked human
-                tracked_center = human_data['center']
+        for track in tracks:
+            if len(track) >= 5:  # Ensure we have at least x1, y1, x2, y2, track_id
+                x1, y1, x2, y2 = track[:4]
+                track_id = int(track[4])
+                conf = track[5] if len(track) > 5 else 0.8
                 
-                # Use predictive matching based on velocity
-                velocity = human_data.get('velocity', [0.0, 0.0])
-                time_since_last = current_time - human_data['last_seen']
-                
-                # Predict where the human should be now based on last known velocity
-                predicted_center = [
-                    tracked_center[0] + velocity[0] * time_since_last,
-                    tracked_center[1] + velocity[1] * time_since_last
-                ]
-                
-                # Calculate distance to both actual last position and predicted position
-                distance_to_last = math.sqrt(
-                    (detection_center[0] - tracked_center[0])**2 + 
-                    (detection_center[1] - tracked_center[1])**2
-                )
-                distance_to_predicted = math.sqrt(
-                    (detection_center[0] - predicted_center[0])**2 + 
-                    (detection_center[1] - predicted_center[1])**2
-                )
-                
-                # Use the better of the two distances
-                distance = min(distance_to_last, distance_to_predicted)
-                
-                # Also check against recent position history for robustness
-                min_history_distance = distance
-                position_history = human_data.get('position_history', [])
-                for hist_center, hist_time in position_history[-3:]:  # Check last 3 positions
-                    hist_distance = math.sqrt(
-                        (detection_center[0] - hist_center[0])**2 + 
-                        (detection_center[1] - hist_center[1])**2
-                    )
-                    min_history_distance = min(min_history_distance, hist_distance)
-                
-                # Use the best distance from all methods
-                final_distance = min(distance, min_history_distance)
-                
-                # Consider area similarity as well
-                area_ratio = min(detection_area, human_data['area']) / max(detection_area, human_data['area'])
-                
-                # Combined matching score (distance + area similarity) - relaxed for laggy feeds
-                if final_distance < self.max_tracking_distance and area_ratio > 0.3:
-                    if final_distance < best_distance:
-                        best_distance = final_distance
-                        best_match_id = human_id
-            
-            if best_match_id is not None:
-                # Update existing tracked human
-                detection['id'] = best_match_id
-                human_data = self.tracked_humans[best_match_id]
-                
-                # Calculate velocity for prediction
-                old_center = human_data['center']
-                old_time = human_data['last_seen']
-                time_delta = current_time - old_time
-                
-                if time_delta > 0:
-                    velocity = [
-                        (detection_center[0] - old_center[0]) / time_delta,
-                        (detection_center[1] - old_center[1]) / time_delta
-                    ]
-                else:
-                    velocity = human_data.get('velocity', [0.0, 0.0])
-                
-                # Update position history
-                position_history = human_data.get('position_history', [])
-                position_history.append((detection_center, current_time))
-                # Keep only last 5 positions
-                if len(position_history) > 5:
-                    position_history = position_history[-5:]
-                
-                self.tracked_humans[best_match_id].update({
-                    'center': detection_center,
-                    'area': detection_area,
-                    'bbox': detection['bbox'],
-                    'confidence': detection['confidence'],
-                    'last_seen': current_time,
-                    'velocity': velocity,
-                    'position_history': position_history
-                })
-            else:
-                # Create new tracked human
-                detection['id'] = self.next_human_id
-                self.tracked_humans[self.next_human_id] = {
-                    'center': detection_center,
-                    'area': detection_area,
-                    'bbox': detection['bbox'],
-                    'confidence': detection['confidence'],
-                    'last_seen': current_time,
-                    'first_seen': current_time,
-                    'velocity': [0.0, 0.0],  # [vx, vy] pixels per second
-                    'position_history': [(detection_center, current_time)]  # Last 5 positions
+                # Create detection in our format
+                detection = {
+                    'id': track_id,
+                    'bbox': [int(x1), int(y1), int(x2), int(y2)],
+                    'confidence': float(conf),
+                    'class': 'human',
+                    'center': [int((x1 + x2) / 2), int((y1 + y2) / 2)],
+                    'area': int((x2 - x1) * (y2 - y1))
                 }
-                self.next_human_id += 1
-            
-            tracked_detections.append(detection)
+                
+                # Update our tracking metadata
+                self.tracked_humans[track_id] = {
+                    'center': detection['center'],
+                    'area': detection['area'],
+                    'bbox': detection['bbox'],
+                    'confidence': detection['confidence'],
+                    'last_seen': current_time,
+                    'first_seen': self.tracked_humans.get(track_id, {}).get('first_seen', current_time)
+                }
+                
+                tracked_detections.append(detection)
+        
+        # Clean up old tracking metadata
+        current_track_ids = {det['id'] for det in tracked_detections}
+        expired_ids = []
+        for track_id, human_data in self.tracked_humans.items():
+            if (track_id not in current_track_ids and 
+                current_time - human_data['last_seen'] > self.human_timeout):
+                expired_ids.append(track_id)
+        
+        for track_id in expired_ids:
+            del self.tracked_humans[track_id]
+            # Clean up gesture history for this human
+            if track_id in self.last_gesture_responses:
+                del self.last_gesture_responses[track_id]
+            if track_id in self.gesture_states:
+                del self.gesture_states[track_id]
+            if track_id in self.gesture_start_times:
+                del self.gesture_start_times[track_id]
         
         return tracked_detections
     
