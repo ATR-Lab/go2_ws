@@ -102,6 +102,12 @@ class SimpleCameraDisplay(Node):
             self.update_display
         )
         
+        # Setup cleanup timer for stale detections (every 2 seconds)
+        self.cleanup_timer = self.create_timer(
+            2.0,  # Every 2 seconds
+            self.cleanup_stale_detections
+        )
+        
         self.get_logger().info('Simple Camera Display Node initialized')
         self.get_logger().info('Press "q" to quit, "s" to save screenshot')
     
@@ -133,17 +139,7 @@ class SimpleCameraDisplay(Node):
             # Store detection data by human ID
             self.current_detections[human_id] = data
             
-            # Clean up old detections (older than 5 seconds)
-            current_time = time.time()
-            expired_humans = []
-            for hid, det_data in self.current_detections.items():
-                if current_time - det_data.get('timestamp', current_time) > 5.0:
-                    expired_humans.append(hid)
-            
-            for hid in expired_humans:
-                del self.current_detections[hid]
-                if hid in self.current_gestures:
-                    del self.current_gestures[hid]
+            # Note: Cleanup now handled by cleanup_timer for efficiency
                     
         except Exception as e:
             self.get_logger().error(f'Error processing people data: {e}')
@@ -421,6 +417,29 @@ class SimpleCameraDisplay(Node):
             
         except Exception as e:
             self.get_logger().error(f'Error drawing performance info: {e}')
+    
+    def cleanup_stale_detections(self):
+        """Clean up stale detections and gestures (runs every 2 seconds)"""
+        try:
+            current_time = time.time()
+            expired_humans = []
+            
+            # Find expired detections (older than 1.5 seconds for laggy video)
+            for hid, det_data in self.current_detections.items():
+                if current_time - det_data.get('timestamp', current_time) > 1.5:
+                    expired_humans.append(hid)
+            
+            # Remove expired detections and associated gestures
+            for hid in expired_humans:
+                del self.current_detections[hid]
+                if hid in self.current_gestures:
+                    del self.current_gestures[hid]
+                    
+            if expired_humans:
+                self.get_logger().debug(f'Cleaned up {len(expired_humans)} stale detections')
+                
+        except Exception as e:
+            self.get_logger().error(f'Error cleaning up stale detections: {e}')
     
     def save_screenshot(self, image: np.ndarray):
         """Save a screenshot of the current display"""
