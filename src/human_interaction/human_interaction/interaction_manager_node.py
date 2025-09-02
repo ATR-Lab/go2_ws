@@ -225,6 +225,13 @@ class InteractionManagerNode(Node):
             '/webrtc_req',
             10
         )
+        
+        # Navigation commands (to enhanced collision monitor)
+        self.nav_command_pub = self.create_publisher(
+            String,
+            '/interaction/nav_commands',
+            10
+        )
     
     def setup_subscribers(self):
         """Setup ROS subscribers"""
@@ -433,10 +440,9 @@ class InteractionManagerNode(Node):
                 success = self.send_robot_gesture(api_id, command, human_id)
                 status = 'success' if success else 'failed'
             elif api_id == 'navigation':
-                # Future: Navigation command
-                self.get_logger().info(f'Navigation command {command} queued for future implementation')
-                status = 'queued'
-                success = True
+                # Navigation command - send to enhanced collision monitor
+                success = self.send_navigation_command(command, human_id, context)
+                status = 'success' if success else 'failed'
             else:
                 self.get_logger().error(f"Invalid command type for {command}: {api_id}")
                 status = 'failed'
@@ -474,6 +480,32 @@ class InteractionManagerNode(Node):
             
         except Exception as e:
             self.get_logger().error(f'Error sending robot gesture {command_name}: {e}')
+            return False
+    
+    def send_navigation_command(self, command: str, human_id: int = None, context: dict = None) -> bool:
+        """Send navigation command to enhanced collision monitor"""
+        try:
+            # Create navigation command message
+            nav_msg = String()
+            nav_data = {
+                'command': command,
+                'human_id': human_id,
+                'timestamp': time.time(),
+                'context': context or {}
+            }
+            nav_msg.data = json.dumps(nav_data)
+            
+            # Publish to enhanced collision monitor
+            self.nav_command_pub.publish(nav_msg)
+            
+            # Log the command
+            human_info = f" for human {human_id}" if human_id else ""
+            self.get_logger().info(f'Navigation command sent: {command}{human_info}')
+            
+            return True
+            
+        except Exception as e:
+            self.get_logger().error(f'Error sending navigation command {command}: {e}')
             return False
     
     def publish_command_log(self, command_id: str, command: str, human_id: int, status: str, error: str = None, context: dict = None):
