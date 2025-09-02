@@ -96,9 +96,9 @@ class HumanDetectionNode(Node):
         
         # Gesture stability tracking
         self.gesture_stability_buffer = {}  # Dict[human_id, Dict[gesture, List[timestamps]]]
-        self.gesture_stability_window = 0.8  # seconds - require gesture to be stable for this long (reduced)
-        self.gesture_stability_threshold = 0.6  # 60% of frames must show same gesture (reduced)
-        self.min_gesture_confidence_frames = 3  # minimum frames to confirm gesture (reduced)
+        self.gesture_stability_window = 2.0  # seconds - increased to handle WebRTC timing gaps
+        self.gesture_stability_threshold = 0.3  # 30% of frames must show same gesture (relaxed for persistent IDs)
+        self.min_gesture_confidence_frames = 1  # minimum frames to confirm gesture (reduced for faster detection)
         
         # Gesture state tracking
         self.gesture_states = {}  # Dict[human_id, Dict[gesture, GestureState]]
