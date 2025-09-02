@@ -36,6 +36,23 @@ class InteractionState(Enum):
     COMMAND_EXECUTION = "command_execution"
     RESUME_PATROL = "resume_patrol"
 
+class HumanInteractionState(Enum):
+    """Per-human interaction state enumeration"""
+    UNKNOWN = "unknown"
+    APPROACHING = "approaching"
+    FIRST_CONTACT = "first_contact"
+    ACTIVE_INTERACTION = "active_interaction"
+    IDLE_PRESENCE = "idle_presence"
+    LEAVING = "leaving"
+    GONE = "gone"
+
+class CommandPriority(Enum):
+    """Command priority levels"""
+    SAFETY = 1      # step_back, emergency - always execute
+    STATE_TRANSITION = 2  # greeting, farewell - once per state change
+    GESTURE_RESPONSE = 3  # fist_bump, peace_sign - rate limited
+    MAINTENANCE = 4       # patrol, idle - background only
+
 class InteractionManagerNode(Node):
     """Interaction management and behavior orchestration node"""
     
@@ -56,6 +73,18 @@ class InteractionManagerNode(Node):
         self.active_interaction_human = None  # ID of human currently being interacted with
         self.interaction_queue = []  # Queue of humans waiting for interaction
         self.active_gestures = {}  # Dict[human_id, List[gestures]]
+        
+        # Smart interaction state management
+        self.human_states = {}  # Dict[human_id, HumanInteractionState]
+        self.human_state_timestamps = {}  # Dict[human_id, timestamp_of_last_state_change]
+        self.human_last_interaction = {}  # Dict[human_id, timestamp_of_last_command]
+        self.human_distance_history = {}  # Dict[human_id, List[(distance, timestamp)]]
+        
+        # Command coordination system
+        self.command_queue = []  # List of pending commands with priority
+        self.last_command_per_human = {}  # Dict[human_id, (command, timestamp)]
+        self.command_cooldown_per_human = 3.0  # seconds between commands to same human
+        self.state_transition_cooldown = 5.0  # seconds between state-based commands
         
         # Priority and interaction management
         self.max_simultaneous_interactions = 1  # Only interact with one human at a time
@@ -210,7 +239,7 @@ class InteractionManagerNode(Node):
                 self.active_gestures[human_id] = gestures
             
             # Process gestures for interaction
-            self.process_gestures(data)
+            self.process_human_gestures(data)
             
         except Exception as e:
             self.get_logger().error(f'Error processing gestures: {e}')
@@ -337,7 +366,7 @@ class InteractionManagerNode(Node):
             self.get_logger().error(f'Error starting interaction with human {human_id}: {e}')
     
     def process_human_gestures(self, gesture_data: Dict):
-        """Process gestures from a specific human with state awareness"""
+        """Process gestures with smart context-aware logic"""
         try:
             human_id = gesture_data['human_id']
             gestures = gesture_data.get('gestures', [])
@@ -349,21 +378,27 @@ class InteractionManagerNode(Node):
             # Update active gestures for this human
             self.active_gestures[human_id] = gestures
             
-            # Generate responses only for NEW gestures to avoid spam
+            # Get human context
+            human_data = self.detected_humans.get(human_id, {})
+            distance = human_data.get('distance', float('inf'))
+            zone = human_data.get('zone', 'far')
+            
+            # Update human interaction state based on proximity and movement
+            self.update_human_interaction_state(human_id, distance, zone)
+            
+            # Process gestures with smart logic
             for gesture in gestures:
                 gesture_state = gesture_states.get(gesture, 'unknown')
                 
-                # Only respond to NEW gestures, not ONGOING ones
+                # Only respond to NEW gestures
                 if gesture_state == 'new':
-                    response = self.generate_gesture_response(gesture, human_id)
+                    response = self.smart_gesture_response(human_id, gesture, distance, zone)
                     if response:
-                        self.send_behavior_command(response)
-                        self.get_logger().info(f'Responding to NEW gesture "{gesture}" from human {human_id}')
-                elif gesture_state == 'ongoing':
-                    self.get_logger().debug(f'Ignoring ONGOING gesture "{gesture}" from human {human_id}')
-                elif gesture_state == 'ended':
-                    self.get_logger().debug(f'Gesture "{gesture}" ENDED for human {human_id}')
-                    
+                        self.queue_command(human_id, response, CommandPriority.GESTURE_RESPONSE)
+                        self.get_logger().info(f'Smart response to "{gesture}" from human {human_id}: {response}')
+                    else:
+                        self.get_logger().debug(f'Ignoring gesture "{gesture}" from human {human_id} (context: {self.human_states.get(human_id, "unknown")})')
+                        
         except Exception as e:
             import traceback
             self.get_logger().error(f'Error processing human gestures: {e}')
@@ -464,24 +499,29 @@ class InteractionManagerNode(Node):
                         self.send_behavior_command(response)
     
     def process_proximity(self, proximity_data: Dict):
-        """Process proximity information and adjust behaviors with rate limiting"""
+        """Process proximity information with smart command coordination"""
         zone = proximity_data.get('zone', 'far')
         distance = proximity_data.get('distance', float('inf'))
-        current_time = time.time()
         
         with self.state_lock:
-            if self.current_state == InteractionState.INTERACTION:
-                # Rate limit proximity commands to prevent spam
-                if current_time - self.last_proximity_command < self.proximity_command_rate_limit:
-                    return  # Skip this proximity command due to rate limiting
-                
-                # Adjust behavior based on proximity
-                if distance < 1.0:  # Very close
-                    if self.send_behavior_command_with_rate_limit('step_back', current_time):
-                        self.last_proximity_command = current_time
-                elif distance > 3.0:  # Too far
-                    if self.send_behavior_command_with_rate_limit('approach_human', current_time):
-                        self.last_proximity_command = current_time
+            # Find which human this proximity data belongs to (assume closest human for now)
+            closest_human_id = None
+            closest_distance = float('inf')
+            
+            for human_id, human_data in self.detected_humans.items():
+                human_distance = human_data.get('distance', float('inf'))
+                if human_distance < closest_distance:
+                    closest_distance = human_distance
+                    closest_human_id = human_id
+            
+            if closest_human_id and self.current_state == InteractionState.INTERACTION:
+                # Safety-first proximity handling
+                if distance < 0.8:  # Too close - safety priority
+                    self.queue_command(closest_human_id, 'step_back', CommandPriority.SAFETY)
+                elif distance > 4.0 and zone == 'far':  # Too far - approach if was interacting
+                    human_state = self.human_states.get(closest_human_id, HumanInteractionState.UNKNOWN)
+                    if human_state in [HumanInteractionState.ACTIVE_INTERACTION, HumanInteractionState.IDLE_PRESENCE]:
+                        self.queue_command(closest_human_id, 'approach_human', CommandPriority.GESTURE_RESPONSE)
     
     def transition_to_state(self, new_state: InteractionState):
         """Transition to a new interaction state"""
@@ -775,6 +815,195 @@ class InteractionManagerNode(Node):
             
         except Exception as e:
             self.get_logger().error(f'Error updating interaction state: {e}')
+    
+    def update_human_interaction_state(self, human_id: int, distance: float, zone: str):
+        """Update per-human interaction state based on proximity and context"""
+        try:
+            current_time = time.time()
+            current_state = self.human_states.get(human_id, HumanInteractionState.UNKNOWN)
+            new_state = current_state
+            
+            # Initialize if new human
+            if human_id not in self.human_states:
+                self.human_states[human_id] = HumanInteractionState.UNKNOWN
+                self.human_state_timestamps[human_id] = current_time
+                self.human_last_interaction[human_id] = 0
+            
+            # Update distance history
+            if human_id not in self.human_distance_history:
+                self.human_distance_history[human_id] = []
+            
+            distance_history = self.human_distance_history[human_id]
+            distance_history.append((distance, current_time))
+            
+            # Keep only recent history (last 10 seconds)
+            cutoff_time = current_time - 10.0
+            distance_history[:] = [(d, t) for d, t in distance_history if t > cutoff_time]
+            
+            # Detect movement direction
+            movement = self.detect_movement_direction(human_id)
+            
+            # State transition logic
+            if zone == 'far':
+                if movement == 'approaching':
+                    new_state = HumanInteractionState.APPROACHING
+                else:
+                    new_state = HumanInteractionState.UNKNOWN
+            
+            elif zone == 'approach':
+                if movement == 'approaching':
+                    new_state = HumanInteractionState.APPROACHING
+                elif movement == 'leaving':
+                    new_state = HumanInteractionState.LEAVING
+                else:
+                    new_state = HumanInteractionState.APPROACHING  # Default for approach zone
+            
+            elif zone == 'interaction':
+                if movement == 'leaving':
+                    new_state = HumanInteractionState.LEAVING
+                elif current_state == HumanInteractionState.UNKNOWN or current_state == HumanInteractionState.APPROACHING:
+                    new_state = HumanInteractionState.FIRST_CONTACT
+                elif current_state == HumanInteractionState.FIRST_CONTACT:
+                    # Check if we've had recent interaction
+                    last_interaction = self.human_last_interaction.get(human_id, 0)
+                    if current_time - last_interaction < 10.0:
+                        new_state = HumanInteractionState.ACTIVE_INTERACTION
+                    else:
+                        new_state = HumanInteractionState.FIRST_CONTACT  # Stay in first contact
+                elif current_state == HumanInteractionState.ACTIVE_INTERACTION:
+                    # Check if interaction has gone idle
+                    last_interaction = self.human_last_interaction.get(human_id, 0)
+                    if current_time - last_interaction > 30.0:
+                        new_state = HumanInteractionState.IDLE_PRESENCE
+                else:
+                    new_state = current_state  # Maintain current state
+            
+            # Handle state transitions
+            if new_state != current_state:
+                self.human_states[human_id] = new_state
+                self.human_state_timestamps[human_id] = current_time
+                
+                self.get_logger().info(f'Human {human_id} state: {current_state.value} → {new_state.value} (zone: {zone}, movement: {movement})')
+                
+                # Trigger state-based commands
+                if new_state == HumanInteractionState.APPROACHING and current_state == HumanInteractionState.UNKNOWN:
+                    # Someone is approaching - no immediate action, wait for gesture
+                    pass
+                elif new_state == HumanInteractionState.FIRST_CONTACT:
+                    # Ready for first interaction - wait for gesture
+                    pass
+                elif new_state == HumanInteractionState.LEAVING:
+                    # Send farewell if was interacting
+                    if current_state in [HumanInteractionState.ACTIVE_INTERACTION, HumanInteractionState.IDLE_PRESENCE]:
+                        self.queue_command(human_id, 'farewell', CommandPriority.STATE_TRANSITION)
+                        
+        except Exception as e:
+            self.get_logger().error(f'Error updating human interaction state: {e}')
+    
+    def smart_gesture_response(self, human_id: int, gesture: str, distance: float, zone: str) -> Optional[str]:
+        """Generate smart context-aware response to gesture"""
+        try:
+            current_time = time.time()
+            human_state = self.human_states.get(human_id, HumanInteractionState.UNKNOWN)
+            last_interaction = self.human_last_interaction.get(human_id, 0)
+            
+            # Safety first - if too close, suppress gesture responses
+            if distance < 0.8:
+                return None  # Let safety commands handle this
+            
+            # Zone-based filtering
+            if zone == 'far':
+                return None  # Ignore gestures from far away
+            
+            elif zone == 'approach':
+                # Only acknowledge waves when approaching
+                if human_state == HumanInteractionState.APPROACHING:
+                    if gesture in ['left_wave', 'right_wave', 'wave']:
+                        return 'wave_back'  # Acknowledge approach
+                return None
+            
+            elif zone == 'interaction':
+                # Full gesture processing based on interaction state
+                
+                if human_state == HumanInteractionState.FIRST_CONTACT:
+                    # First interaction - respond to greeting gestures
+                    if gesture in ['left_wave', 'right_wave', 'wave', 'hands_visible']:
+                        self.human_last_interaction[human_id] = current_time
+                        return 'hello_gesture'
+                    return None  # Wait for proper greeting
+                
+                elif human_state == HumanInteractionState.ACTIVE_INTERACTION:
+                    # Active conversation - check cooldown
+                    if current_time - last_interaction < self.command_cooldown_per_human:
+                        return None  # Too soon since last interaction
+                    
+                    # Full gesture responses
+                    gesture_map = {
+                        'left_fist': 'fist_bump', 'right_fist': 'fist_bump',
+                        'left_thumbs_up': 'happy_dance', 'right_thumbs_up': 'happy_dance',
+                        'left_peace_sign': 'peace_response', 'right_peace_sign': 'peace_response',
+                        'left_pointing': 'look_at_point', 'right_pointing': 'look_at_point',
+                        'left_ok_sign': 'acknowledge', 'right_ok_sign': 'acknowledge'
+                    }
+                    
+                    response = gesture_map.get(gesture, None)
+                    if response:
+                        self.human_last_interaction[human_id] = current_time
+                    return response
+                
+                elif human_state == HumanInteractionState.IDLE_PRESENCE:
+                    # Idle together - only respond to attention-seeking gestures
+                    attention_gestures = {
+                        'left_thumbs_up': 'happy_dance', 'right_thumbs_up': 'happy_dance',
+                        'left_peace_sign': 'peace_response', 'right_peace_sign': 'peace_response',
+                        'left_fist': 'fist_bump', 'right_fist': 'fist_bump',
+                        'left_pointing': 'look_at_point', 'right_pointing': 'look_at_point'
+                    }
+                    
+                    if gesture in attention_gestures:
+                        # Check cooldown for attention gestures
+                        if current_time - last_interaction > 10.0:  # Longer cooldown for idle
+                            self.human_last_interaction[human_id] = current_time
+                            return attention_gestures[gesture]
+                    
+                    # Ignore casual gestures (wave, hands_visible) when idle
+                    return None
+            
+            return None
+            
+        except Exception as e:
+            self.get_logger().error(f'Error in smart gesture response: {e}')
+            return None
+    
+    def queue_command(self, human_id: int, command: str, priority: CommandPriority):
+        """Queue command with priority and coordination"""
+        try:
+            current_time = time.time()
+            
+            # Check if we can send command to this human
+            if human_id in self.last_command_per_human:
+                last_command, last_time = self.last_command_per_human[human_id]
+                
+                # Priority-based cooldown
+                if priority == CommandPriority.SAFETY:
+                    cooldown = 0.5  # Safety commands have minimal cooldown
+                elif priority == CommandPriority.STATE_TRANSITION:
+                    cooldown = self.state_transition_cooldown
+                else:
+                    cooldown = self.command_cooldown_per_human
+                
+                if current_time - last_time < cooldown:
+                    self.get_logger().debug(f'Command {command} to human {human_id} blocked by cooldown')
+                    return
+            
+            # Execute command immediately (for now - could implement actual queue later)
+            self.send_behavior_command(command)
+            self.last_command_per_human[human_id] = (command, current_time)
+            
+            self.get_logger().debug(f'Executed {priority.name} command "{command}" for human {human_id}')
+            
+        except Exception as e:
+            self.get_logger().error(f'Error queuing command: {e}')
 
 
 def main(args=None):
