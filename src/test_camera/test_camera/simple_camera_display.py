@@ -131,26 +131,27 @@ class SimpleCameraDisplay(Node):
     
     def update_display(self):
         """Update the camera display with overlays"""
-        if self.current_image is None:
-            return
-        
         try:
-            # Create a copy for display
-            display_image = self.current_image.copy()
+            if self.current_image is None:
+                # Create a black placeholder image when no camera feed
+                display_image = self.create_waiting_screen()
+            else:
+                # Create a copy for display
+                display_image = self.current_image.copy()
+                
+                # Draw YOLO detections
+                self.draw_yolo_detections(display_image)
+                
+                # Draw MediaPipe gestures
+                self.draw_gesture_info(display_image)
+                
+                # Draw interaction state
+                self.draw_state_info(display_image)
+                
+                # Draw performance info
+                self.draw_performance_info(display_image)
             
-            # Draw YOLO detections
-            self.draw_yolo_detections(display_image)
-            
-            # Draw MediaPipe gestures
-            self.draw_gesture_info(display_image)
-            
-            # Draw interaction state
-            self.draw_state_info(display_image)
-            
-            # Draw performance info
-            self.draw_performance_info(display_image)
-            
-            # Display the image
+            # Always display the image (either camera feed or waiting screen)
             cv2.imshow('Robot Dog Petting Zoo - Camera Feed', display_image)
             
             # Handle key presses
@@ -163,6 +164,60 @@ class SimpleCameraDisplay(Node):
                 
         except Exception as e:
             self.get_logger().error(f'Error updating display: {e}')
+    
+    def create_waiting_screen(self) -> np.ndarray:
+        """Create a waiting screen when no camera feed is available"""
+        try:
+            # Create a black image (640x480 default size)
+            height, width = 480, 640
+            waiting_image = np.zeros((height, width, 3), dtype=np.uint8)
+            
+            # Main waiting message
+            main_text = "Waiting for Robot Dog Camera Feed..."
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.8
+            color = (255, 255, 255)  # White text
+            thickness = 2
+            
+            # Get text size and center it
+            text_size = cv2.getTextSize(main_text, font, font_scale, thickness)[0]
+            text_x = (width - text_size[0]) // 2
+            text_y = (height - text_size[1]) // 2
+            
+            # Draw main message
+            cv2.putText(waiting_image, main_text, (text_x, text_y), 
+                       font, font_scale, color, thickness)
+            
+            # Instructions
+            instructions = [
+                "Press 'q' to quit",
+                "Waiting for /camera/image_raw topic...",
+                f"Current State: {self.current_state}"
+            ]
+            
+            # Draw instructions
+            for i, instruction in enumerate(instructions):
+                inst_size = cv2.getTextSize(instruction, font, 0.5, 1)[0]
+                inst_x = (width - inst_size[0]) // 2
+                inst_y = text_y + 60 + (i * 30)
+                cv2.putText(waiting_image, instruction, (inst_x, inst_y), 
+                           font, 0.5, (200, 200, 200), 1)
+            
+            # Add a subtle border
+            cv2.rectangle(waiting_image, (10, 10), (width-10, height-10), 
+                         (100, 100, 100), 2)
+            
+            # Add timestamp
+            timestamp_text = f"Waiting since: {time.strftime('%H:%M:%S')}"
+            cv2.putText(waiting_image, timestamp_text, (20, height-20), 
+                       font, 0.4, (150, 150, 150), 1)
+            
+            return waiting_image
+            
+        except Exception as e:
+            self.get_logger().error(f'Error creating waiting screen: {e}')
+            # Return a simple black image as fallback
+            return np.zeros((480, 640, 3), dtype=np.uint8)
     
     def draw_yolo_detections(self, image: np.ndarray):
         """Draw YOLO human detection bounding boxes"""

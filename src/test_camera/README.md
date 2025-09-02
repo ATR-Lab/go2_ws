@@ -47,17 +47,7 @@ The `test_camera` package serves as a **development and testing tool** for the r
   - `q`: Quit application
   - `s`: Save screenshot
 
-#### 3. `detection_visualizer` (Advanced)
-**Purpose**: PyQt5-based advanced visualization (may have Qt conflicts)
-- **Executable**: `ros2 run test_camera detection_visualizer`
-- **Note**: Uses `python_qt_binding` for ROS2 integration
-- **Status**: May experience Qt platform conflicts on some systems
 
-#### 4. `rviz_visualizer`
-**Purpose**: RViz2 marker-based visualization
-- **Executable**: `ros2 run test_camera rviz_visualizer`
-- **Publishes**: `/visualization_marker_array` for RViz2 display
-- **Usage**: Requires RViz2 with MarkerArray display configured
 
 ### Launch Files
 
@@ -156,9 +146,9 @@ ros2 run test_camera test_camera_node --ros-args -p camera_index:=1
 - Make distinct, deliberate gestures
 - Check that `human_interaction` package is running
 
-### Qt Display Issues
-- Use `simple_camera_display` instead of `detection_visualizer`
-- The simple display uses OpenCV and avoids Qt conflicts
+### Display Issues
+- The `simple_camera_display` uses OpenCV for reliable cross-platform compatibility
+- Ensure X11 forwarding is enabled if using SSH
 
 ### Performance Issues
 ```bash

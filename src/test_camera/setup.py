@@ -24,8 +24,6 @@ setup(
     entry_points={
         'console_scripts': [
             'test_camera_node = test_camera.test_camera_node:main',
-            'detection_visualizer = test_camera.detection_visualizer:main',
-            'rviz_visualizer = test_camera.rviz_visualizer:main',
             'simple_camera_display = test_camera.simple_camera_display:main',
         ],
     },

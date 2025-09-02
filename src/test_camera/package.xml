@@ -3,7 +3,7 @@
 <package format="3">
   <name>test_camera</name>
   <version>0.0.0</version>
-  <description>Test camera and visualization utilities for robot dog petting zoo system. Provides PC camera feed and PyQt5 visualization UI for testing human detection and gesture recognition.</description>
+  <description>Test camera and visualization utilities for robot dog petting zoo system. Provides PC camera feed and OpenCV visualization for testing human detection and gesture recognition.</description>
   <maintainer email="atr-lab@example.com">atr-lab</maintainer>
   <license>BSD-3-Clause</license>
 
@@ -11,7 +11,6 @@
   <depend>sensor_msgs</depend>
   <depend>cv_bridge</depend>
   <depend>human_interaction</depend>
-  <depend>python_qt_binding</depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
