@@ -69,6 +69,7 @@ class Go2LaunchConfig:
             'nav2': os.path.join(self.package_dir, 'config', 'nav2_params.yaml'),
             'rviz': os.path.join(self.package_dir, 'config', self.rviz_config),
             'urdf': os.path.join(self.package_dir, 'urdf', self.urdf_file),
+            'collision_monitor': os.path.join(self.package_dir, 'config', 'collision_monitor_params.yaml'),
         }
 
 
@@ -87,6 +88,7 @@ class Go2NodeFactory:
             DeclareLaunchArgument('foxglove', default_value='true', description='Launch Foxglove Bridge'),
             DeclareLaunchArgument('joystick', default_value='true', description='Launch joystick'),
             DeclareLaunchArgument('teleop', default_value='true', description='Launch teleoperation'),
+            DeclareLaunchArgument('collision_monitor', default_value='true', description='Launch collision monitor'),
         ]
     
     def create_robot_state_nodes(self) -> List[Node]:
@@ -241,6 +243,22 @@ class Go2NodeFactory:
                     'output_topic': '/scan_restamped',
                     'frame_id': 'base_footprint'
                 }],
+            ),
+        ]
+    
+    def create_collision_monitor_node(self) -> List[Node]:
+        """Create collision monitor safety node"""
+        with_collision_monitor = LaunchConfiguration('collision_monitor', default='true')
+        
+        return [
+            # Collision monitor - safety layer for obstacle avoidance
+            Node(
+                package='nav2_collision_monitor',
+                executable='collision_monitor',
+                name='collision_monitor',
+                output='screen',
+                condition=IfCondition(with_collision_monitor),
+                parameters=[self.config.config_paths['collision_monitor']],
             ),
         ]
     
@@ -405,6 +423,7 @@ def generate_launch_description():
     launch_args = factory.create_launch_arguments()
     robot_state_nodes = factory.create_robot_state_nodes()
     core_nodes = factory.create_core_nodes()
+    collision_monitor_nodes = factory.create_collision_monitor_node()
     teleop_nodes = factory.create_teleop_nodes()
     visualization_nodes = factory.create_visualization_nodes()
     include_launches = factory.create_include_launches()
@@ -414,6 +433,7 @@ def generate_launch_description():
         launch_args +
         robot_state_nodes +
         core_nodes +
+        collision_monitor_nodes +
         teleop_nodes +
         visualization_nodes +
         include_launches
