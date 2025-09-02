@@ -33,9 +33,11 @@ class SimpleCameraDisplay(Node):
         
         # Camera state
         self.current_image = None
-        self.current_detections = []
-        self.current_gestures = []
+        self.current_detections = {}  # Dict[human_id, detection_data]
+        self.current_gestures = {}   # Dict[human_id, gesture_data]
+        self.combined_gestures = {}  # Priority-ordered gestures
         self.current_state = "Unknown"
+        self.interaction_events = []  # Recent interaction events
         
         # Performance tracking
         self.frame_count = 0
@@ -78,6 +80,22 @@ class SimpleCameraDisplay(Node):
             10
         )
         
+        # Subscribe to combined gestures for multi-human display
+        self.combined_gestures_sub = self.create_subscription(
+            String,
+            '/human_detection/combined_gestures',
+            self.combined_gestures_callback,
+            10
+        )
+        
+        # Subscribe to interaction events
+        self.events_sub = self.create_subscription(
+            String,
+            '/interaction/events',
+            self.events_callback,
+            10
+        )
+        
         # Setup display timer
         self.display_timer = self.create_timer(
             0.033,  # ~30 FPS
@@ -109,7 +127,24 @@ class SimpleCameraDisplay(Node):
         """Handle human detection results"""
         try:
             data = json.loads(msg.data)
-            self.current_detections = [data]  # Wrap in list for consistency
+            detection = data.get('detection', {})
+            human_id = detection.get('id', 0)
+            
+            # Store detection data by human ID
+            self.current_detections[human_id] = data
+            
+            # Clean up old detections (older than 5 seconds)
+            current_time = time.time()
+            expired_humans = []
+            for hid, det_data in self.current_detections.items():
+                if current_time - det_data.get('timestamp', current_time) > 5.0:
+                    expired_humans.append(hid)
+            
+            for hid in expired_humans:
+                del self.current_detections[hid]
+                if hid in self.current_gestures:
+                    del self.current_gestures[hid]
+                    
         except Exception as e:
             self.get_logger().error(f'Error processing people data: {e}')
     
@@ -117,7 +152,11 @@ class SimpleCameraDisplay(Node):
         """Handle gesture recognition results"""
         try:
             data = json.loads(msg.data)
-            self.current_gestures = data.get('gestures', [])
+            human_id = data.get('human_id', 0)
+            
+            # Store gesture data by human ID
+            self.current_gestures[human_id] = data
+            
         except Exception as e:
             self.get_logger().error(f'Error processing gestures: {e}')
     
@@ -128,6 +167,25 @@ class SimpleCameraDisplay(Node):
             self.current_state = data.get('current_state', 'Unknown')
         except Exception as e:
             self.get_logger().error(f'Error processing state data: {e}')
+    
+    def combined_gestures_callback(self, msg: String):
+        """Handle combined multi-human gesture data"""
+        try:
+            data = json.loads(msg.data)
+            self.combined_gestures = data
+        except Exception as e:
+            self.get_logger().error(f'Error processing combined gestures: {e}')
+    
+    def events_callback(self, msg: String):
+        """Handle interaction events"""
+        try:
+            data = json.loads(msg.data)
+            # Keep only recent events (last 10)
+            self.interaction_events.append(data)
+            if len(self.interaction_events) > 10:
+                self.interaction_events.pop(0)
+        except Exception as e:
+            self.get_logger().error(f'Error processing events: {e}')
     
     def update_display(self):
         """Update the camera display with overlays"""
@@ -220,9 +278,9 @@ class SimpleCameraDisplay(Node):
             return np.zeros((480, 640, 3), dtype=np.uint8)
     
     def draw_yolo_detections(self, image: np.ndarray):
-        """Draw YOLO human detection bounding boxes"""
+        """Draw YOLO human detection bounding boxes with IDs"""
         try:
-            for detection_data in self.current_detections:
+            for human_id, detection_data in self.current_detections.items():
                 detection = detection_data.get('detection', {})
                 bbox = detection.get('bbox', [])
                 confidence = detection.get('confidence', 0.0)
@@ -236,8 +294,8 @@ class SimpleCameraDisplay(Node):
                     color = (0, 255, 0)  # Green for humans
                     cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
                     
-                    # Draw label
-                    label = f"Human: {confidence:.2f}"
+                    # Draw label with human ID
+                    label = f"Human {human_id}: {confidence:.2f}"
                     label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)[0]
                     cv2.rectangle(image, (x1, y1 - label_size[1] - 10), 
                                 (x1 + label_size[0], y1), color, -1)
@@ -249,18 +307,73 @@ class SimpleCameraDisplay(Node):
                     cv2.putText(image, info_text, (x1, y2 + 20), 
                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
                     
+                    # Draw gesture info for this human
+                    if human_id in self.current_gestures:
+                        gesture_data = self.current_gestures[human_id]
+                        gestures = gesture_data.get('gestures', [])
+                        gesture_states = gesture_data.get('gesture_states', {})
+                        
+                        if gestures:
+                            gesture_y = y2 + 45
+                            for gesture in gestures[:3]:  # Show max 3 gestures per human
+                                state = gesture_states.get(gesture, 'unknown')
+                                state_color = {
+                                    'new': (0, 255, 255),      # Cyan for NEW
+                                    'ongoing': (0, 165, 255),  # Orange for ONGOING
+                                    'ended': (128, 128, 128)   # Gray for ENDED
+                                }.get(state, (255, 255, 255))
+                                
+                                gesture_text = f"{gesture} ({state.upper()})"
+                                cv2.putText(image, gesture_text, (x1, gesture_y), 
+                                           cv2.FONT_HERSHEY_SIMPLEX, 0.4, state_color, 1)
+                                gesture_y += 15
+                    
         except Exception as e:
             self.get_logger().error(f'Error drawing YOLO detections: {e}')
     
     def draw_gesture_info(self, image: np.ndarray):
-        """Draw MediaPipe gesture recognition results"""
+        """Draw priority-based gesture information and interaction queue"""
         try:
-            if self.current_gestures:
-                y_offset = 30
-                for i, gesture in enumerate(self.current_gestures):
-                    text = f"Gesture: {gesture}"
-                    cv2.putText(image, text, (10, y_offset + i*25), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            y_offset = 30
+            
+            # Draw combined gesture priority info
+            if self.combined_gestures:
+                prioritized = self.combined_gestures.get('prioritized_gestures', [])
+                total_humans = self.combined_gestures.get('total_humans', 0)
+                
+                # Header
+                header_text = f"Multi-Human Gestures ({total_humans} humans):"
+                cv2.putText(image, header_text, (10, y_offset), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+                y_offset += 25
+                
+                # Show prioritized gestures
+                for i, gesture_data in enumerate(prioritized[:5]):  # Show top 5
+                    human_id = gesture_data.get('human_id', 0)
+                    gestures = gesture_data.get('gestures', [])
+                    priority = gesture_data.get('priority_score', 0)
+                    
+                    priority_text = f"#{i+1} Human {human_id}: {', '.join(gestures)} (Priority: {priority:.0f})"
+                    color = (0, 255, 255) if i == 0 else (200, 200, 200)  # Highlight top priority
+                    cv2.putText(image, priority_text, (20, y_offset), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+                    y_offset += 20
+            
+            # Draw recent interaction events
+            if self.interaction_events:
+                y_offset += 10
+                events_text = "Recent Events:"
+                cv2.putText(image, events_text, (10, y_offset), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 100, 255), 2)
+                y_offset += 25
+                
+                for event in self.interaction_events[-3:]:  # Show last 3 events
+                    event_type = event.get('event', 'unknown')
+                    human_id = event.get('human_id', 'N/A')
+                    event_text = f"• {event_type} (Human {human_id})"
+                    cv2.putText(image, event_text, (20, y_offset), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 150, 255), 1)
+                    y_offset += 18
                     
         except Exception as e:
             self.get_logger().error(f'Error drawing gesture info: {e}')

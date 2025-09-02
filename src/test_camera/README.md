@@ -29,20 +29,31 @@ The `test_camera` package serves as a **development and testing tool** for the r
   - `enable_preview` (bool, default: true): Show OpenCV preview window
 
 #### 2. `simple_camera_display`
-**Purpose**: Enhanced camera display with AI overlays
+**Purpose**: Enhanced multi-human camera display with AI overlays and priority visualization
 - **Executable**: `ros2 run test_camera simple_camera_display`
 - **Subscribes**:
   - `/camera/image_raw`: Camera feed
-  - `/human_detection/people`: YOLO human detection results
-  - `/human_detection/gestures`: MediaPipe gesture recognition
+  - `/human_detection/people`: YOLO human detection results (per-human)
+  - `/human_detection/gestures`: MediaPipe gesture recognition (per-human)
+  - `/human_detection/combined_gestures`: Priority-ordered multi-human gestures
   - `/interaction/state`: Robot interaction state
-- **Features**:
-  - Real-time camera feed display
-  - YOLO bounding boxes around detected humans
-  - Gesture recognition text overlays
-  - Interaction state display
-  - Performance metrics (FPS, detection counts)
-  - Screenshot capability (press 's')
+  - `/interaction/events`: Interaction events with human IDs
+- **Enhanced Features**:
+  - **Multi-Human Support**: Displays multiple humans with unique IDs
+  - **Gesture Attribution**: Shows which human made which gesture
+  - **Gesture State Tracking**: Visual indication of NEW/ONGOING/ENDED gestures
+  - **Priority Visualization**: Shows gesture priority queue and scores
+  - **Interaction Events**: Recent interaction history with human IDs
+  - **Per-Human Overlays**: Individual bounding boxes with gesture states
+  - **Real-time Updates**: Live tracking of human interactions
+  - **Performance Metrics**: FPS, detection counts, human tracking
+  - **Screenshot Capability**: Save current frame (press 's')
+- **Visual Elements**:
+  - **Green Bounding Boxes**: Human detection with ID labels
+  - **Color-Coded Gestures**: NEW (Cyan), ONGOING (Orange), ENDED (Gray)
+  - **Priority Queue**: Top 5 prioritized gestures with scores
+  - **Event History**: Last 3 interaction events
+  - **Waiting Screen**: Friendly UI when no camera feed available
 - **Controls**:
   - `q`: Quit application
   - `s`: Save screenshot
@@ -104,19 +115,29 @@ ros2 run test_camera simple_camera_display
 
 ## Expected Behavior
 
-### Camera Display Features
+### Multi-Human Camera Display Features
 - **Live Video**: Real-time camera feed from USB webcam
-- **Human Detection**: Green bounding boxes around detected people
-- **Gesture Recognition**: Text overlays showing recognized gestures:
-  - `thumbs_up`, `pointing`, `peace_sign`, `rock_sign`
-  - `open_hand`, `fist`, `ok_sign`, `wave`
-  - `hands_visible` (when hands detected but no specific gesture)
-- **Interaction State**: Top-right corner shows current robot state:
-  - `patrol`, `human_detected`, `interaction`
-- **Performance Metrics**: Bottom-left shows:
+- **Multi-Human Detection**: Green bounding boxes with unique IDs (Human 1, Human 2, etc.)
+- **Per-Human Gesture Recognition**: Individual gesture tracking with state information:
+  - **Left/Right Hand Gestures**: `left_wave`, `right_thumbs_up`, `left_pointing`, etc.
+  - **Gesture States**: NEW (Cyan), ONGOING (Orange), ENDED (Gray)
+  - **Attribution**: Each gesture clearly linked to specific human ID
+- **Priority Visualization**: Top-left shows multi-human gesture queue:
+  - Priority ranking (#1, #2, #3...)
+  - Priority scores (based on proximity and confidence)
+  - Active interaction human highlighted
+- **Interaction Events**: Recent interaction history:
+  - `interaction_started (Human 2)`
+  - `interaction_ended (Human 1)`
+  - Event timestamps and human IDs
+- **Enhanced Interaction State**: Top-right corner shows:
+  - Current robot state (`patrol`, `human_detected`, `interaction`)
+  - Active interaction human ID
+- **Performance Metrics**: Bottom-left displays:
   - FPS counter
-  - Human count
-  - Gesture count
+  - Total humans detected
+  - Active gestures count
+  - Tracking performance
 
 ### Gesture Recognition
 The system recognizes specific hand gestures:
@@ -192,10 +213,52 @@ The package publishes to `/camera/image_raw` which is compatible with:
 - Standard ROS2 camera drivers
 - Other vision processing nodes
 
+### Multi-Human Testing Scenarios
+
+#### Scenario 1: Single Human Interaction
+```bash
+# Test basic human detection and gesture recognition
+ros2 launch test_camera simple_camera_test.launch.py
+ros2 run human_interaction human_detection_node
+ros2 run human_interaction interaction_manager_node
+```
+**Expected**: Single human gets ID 1, gestures show NEW→ONGOING→ENDED states
+
+#### Scenario 2: Multiple Humans - Priority Testing
+```bash
+# Same setup as above, but have 2-3 people in camera view
+```
+**Expected**: 
+- Each person gets unique ID (Human 1, 2, 3...)
+- Priority queue shows closest person first
+- Only highest priority human gets robot responses
+- Other humans wait in queue
+
+#### Scenario 3: Continuous Gesture Testing
+```bash
+# Have someone wave continuously for 30+ seconds
+```
+**Expected**:
+- First wave shows as NEW (Cyan) → robot responds
+- Continued waving shows as ONGOING (Orange) → robot ignores
+- Stop waving → gesture shows as ENDED (Gray)
+- Start waving again → NEW gesture → robot responds again
+
+#### Scenario 4: Gesture Attribution Testing
+```bash
+# Have multiple people gesture simultaneously
+```
+**Expected**:
+- Each gesture clearly attributed to correct human ID
+- Bounding boxes show per-human gesture states
+- Priority queue shows all gestures with scores
+- No gesture confusion between humans
+
 ### Testing Workflow
 1. **Development**: Use `simple_camera_test.launch.py` for basic testing
-2. **AI Testing**: Add human detection with second launch file
-3. **Integration**: Test with full robot system
+2. **Single Human AI**: Test gesture recognition and state tracking
+3. **Multi-Human AI**: Test priority system and gesture attribution  
+4. **Integration**: Test with full robot system and command execution
 4. **Deployment**: Replace with actual robot camera
 
 ### Extending Functionality
