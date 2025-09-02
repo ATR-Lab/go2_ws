@@ -83,6 +83,11 @@ class HumanDetectionNode(Node):
         self.camera_info = None
         self.last_detection_time = time.time()
         
+        # Dynamic FPS measurement for adaptive gesture recognition
+        self.frame_timestamps = []
+        self.measured_fps = 10.0  # Default assumption
+        self.fps_measurement_window = 30  # frames
+        
         # ByteTrack initialization for robust human tracking
         self.tracker = ByteTrack(
             track_thresh=0.6,      # Higher threshold for laggy video
@@ -252,6 +257,10 @@ class HumanDetectionNode(Node):
             return
         
         self.frame_count += 1
+        current_time = time.time()
+        
+        # Update FPS measurement
+        self.update_fps_measurement(current_time)
         
         # Process every 3rd frame for performance
         if self.frame_count % 3 != 0:
@@ -438,6 +447,27 @@ class HumanDetectionNode(Node):
         
         return tracked_detections
     
+    def update_fps_measurement(self, current_time: float):
+        """Update measured FPS for adaptive gesture recognition"""
+        try:
+            # Add current timestamp
+            self.frame_timestamps.append(current_time)
+            
+            # Keep only recent timestamps
+            if len(self.frame_timestamps) > self.fps_measurement_window:
+                self.frame_timestamps.pop(0)
+            
+            # Calculate FPS if we have enough samples
+            if len(self.frame_timestamps) >= 10:
+                time_span = self.frame_timestamps[-1] - self.frame_timestamps[0]
+                if time_span > 0:
+                    measured_fps = (len(self.frame_timestamps) - 1) / time_span
+                    # Smooth the FPS measurement
+                    self.measured_fps = 0.8 * self.measured_fps + 0.2 * measured_fps
+                    
+        except Exception as e:
+            self.get_logger().error(f'Error updating FPS measurement: {e}')
+    
     def estimate_pose(self, frame: np.ndarray) -> Optional[Dict]:
         """Estimate human pose using MediaPipe"""
         try:
@@ -591,8 +621,9 @@ class HumanDetectionNode(Node):
             if len(stability_buffer) < self.min_gesture_confidence_frames:
                 return False  # Not enough frames to confirm gesture
             
-            # Check temporal stability - gesture should be consistent
-            stability_ratio = len(stability_buffer) / (self.gesture_stability_window * 10)  # Assuming ~10 FPS
+            # Check temporal stability - gesture should be consistent (using measured FPS)
+            expected_frames = self.gesture_stability_window * self.measured_fps
+            stability_ratio = len(stability_buffer) / max(expected_frames, 1)  # Prevent division by zero
             if stability_ratio < self.gesture_stability_threshold:
                 return False  # Gesture not stable enough
             
