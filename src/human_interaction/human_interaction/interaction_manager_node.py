@@ -22,6 +22,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 from std_msgs.msg import String
 from geometry_msgs.msg import PoseArray
+from go2_interfaces.msg import WebRtcReq
 import json
 import time
 import threading
@@ -52,6 +53,42 @@ class CommandPriority(Enum):
     STATE_TRANSITION = 2  # greeting, farewell - once per state change
     GESTURE_RESPONSE = 3  # fist_bump, peace_sign - rate limited
     MAINTENANCE = 4       # patrol, idle - background only
+
+# Robot command constants (from Go2 SDK)
+ROBOT_COMMANDS = {
+    # Basic Actions
+    "Hello": 1016,
+    "Sit": 1009,
+    "StandUp": 1004,
+    "Stretch": 1017,
+    
+    # Entertainment
+    "Dance1": 1022,
+    "Dance2": 1023,
+    "WiggleHips": 1033,
+    "FingerHeart": 1036,
+    
+    # Athletic
+    "FrontFlip": 1030,
+    "FrontJump": 1031,
+    "MoonWalk": 1305,
+    "Handstand": 1301,
+}
+
+# Gesture to robot command mapping (using actual detected gesture names)
+GESTURE_COMMAND_MAP = {
+    "right_fist": "Hello",
+    "left_fist": "Hello",
+    "right_open_hand": "Stretch", 
+    "left_open_hand": "Stretch",
+    "hands_visible": "Hello",
+    "right_thumbs_up": "FingerHeart",
+    "left_thumbs_up": "FingerHeart",
+    "right_peace_sign": "Dance1",
+    "left_peace_sign": "Dance1",
+    "right_pointing": "Dance2",
+    "left_pointing": "Dance2",
+}
 
 class InteractionManagerNode(Node):
     """Interaction management and behavior orchestration node"""
@@ -157,6 +194,13 @@ class InteractionManagerNode(Node):
         self.tts_pub = self.create_publisher(
             String, 
             '/tts', 
+            10
+        )
+        
+        # Robot commands (direct to Go2 driver)
+        self.robot_command_pub = self.create_publisher(
+            WebRtcReq,
+            '/webrtc_req',
             10
         )
     
@@ -368,6 +412,60 @@ class InteractionManagerNode(Node):
         except Exception as e:
             self.get_logger().error(f'Error starting interaction with human {human_id}: {e}')
     
+    def send_robot_command(self, command_name: str, human_id: int = None) -> bool:
+        """Send robot command directly to Go2 driver (same pattern as Go2 UI)"""
+        try:
+            if command_name not in ROBOT_COMMANDS:
+                self.get_logger().error(f"Unknown robot command: {command_name}")
+                return False
+            
+            # Create WebRTC request message
+            req = WebRtcReq()
+            req.id = 0  # Auto-assigned
+            req.api_id = ROBOT_COMMANDS[command_name]
+            req.topic = "rt/api/sport/request"  # Standard sport mode topic
+            req.parameter = str(req.api_id)
+            req.priority = 0  # Normal priority
+            
+            # Publish the request
+            self.robot_command_pub.publish(req)
+            
+            # Log the command
+            human_info = f" for human {human_id}" if human_id else ""
+            self.get_logger().info(f'Robot command sent: {command_name} (API ID: {req.api_id}){human_info}')
+            
+            # Publish interaction event
+            event_msg = String()
+            event_data = {
+                'event': 'robot_command_sent',
+                'command': command_name,
+                'human_id': human_id,
+                'timestamp': time.time()
+            }
+            event_msg.data = json.dumps(event_data)
+            self.events_pub.publish(event_msg)
+            
+            return True
+            
+        except Exception as e:
+            self.get_logger().error(f'Error sending robot command {command_name}: {e}')
+            return False
+    
+    def _map_behavior_to_robot_command(self, behavior_command: str) -> Optional[str]:
+        """Map behavior command to robot command"""
+        # Map behavior commands to robot commands
+        behavior_to_robot_map = {
+            'hello_gesture': 'Hello',
+            'wave_back': 'Hello',
+            'fist_bump': 'Hello',
+            'happy_dance': 'Dance1',
+            'peace_response': 'FingerHeart',
+            'acknowledge': 'Hello',
+            'look_at_point': 'Stretch',
+        }
+        
+        return behavior_to_robot_map.get(behavior_command)
+    
     def process_human_gestures(self, gesture_data: Dict):
         """Process gestures with smart context-aware logic"""
         try:
@@ -400,7 +498,13 @@ class InteractionManagerNode(Node):
                         self.queue_command(human_id, response, CommandPriority.GESTURE_RESPONSE)
                         self.get_logger().info(f'Smart response to "{gesture}" from human {human_id}: {response}')
                     else:
-                        self.get_logger().debug(f'Ignoring gesture "{gesture}" from human {human_id} (context: {self.human_states.get(human_id, "unknown")})')
+                        # Check for direct gesture-to-robot command mapping
+                        if gesture in GESTURE_COMMAND_MAP:
+                            robot_command = GESTURE_COMMAND_MAP[gesture]
+                            self.send_robot_command(robot_command, human_id)
+                            self.get_logger().info(f'Direct robot command "{robot_command}" for gesture "{gesture}" from human {human_id}')
+                        else:
+                            self.get_logger().debug(f'Ignoring gesture "{gesture}" from human {human_id} (context: {self.human_states.get(human_id, "unknown")})')
                         
         except Exception as e:
             import traceback
@@ -634,6 +738,11 @@ class InteractionManagerNode(Node):
             }
             command_msg.data = json.dumps(command_data)
             self.commands_pub.publish(command_msg)
+            
+            # Check if this command maps to a robot gesture and send robot command
+            robot_command = self._map_behavior_to_robot_command(command)
+            if robot_command:
+                self.send_robot_command(robot_command)
             
             # Update rate limiting tracker
             self.last_command_time[command] = current_time
