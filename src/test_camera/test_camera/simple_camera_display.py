@@ -44,9 +44,9 @@ class SimpleCameraDisplay(Node):
         self.last_fps_time = time.time()
         self.fps = 0.0
         
-        # Setup QoS for camera data
+        # Setup QoS for camera data (compatible with Go2 camera)
         camera_qos = QoSProfile(
-            reliability=QoSReliabilityPolicy.RELIABLE,
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
             history=QoSHistoryPolicy.KEEP_LAST,
             depth=1
         )

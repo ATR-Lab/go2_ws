@@ -212,12 +212,18 @@ class HumanDetectionNode(Node):
     
     def setup_subscribers(self):
         """Setup ROS subscribers"""
-        # Camera image
+        # Camera image with Go2-compatible QoS
+        camera_qos = QoSProfile(
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1
+        )
+        
         self.image_sub = self.create_subscription(
             Image,
             '/camera/image_raw',
             self.image_callback,
-            10
+            camera_qos
         )
         
         # Camera info
