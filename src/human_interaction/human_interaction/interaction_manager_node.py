@@ -54,40 +54,62 @@ class CommandPriority(Enum):
     GESTURE_RESPONSE = 3  # fist_bump, peace_sign - rate limited
     MAINTENANCE = 4       # patrol, idle - background only
 
-# Robot command constants (from Go2 SDK)
-ROBOT_COMMANDS = {
-    # Basic Actions
-    "Hello": 1016,
-    "Sit": 1009,
-    "StandUp": 1004,
-    "Stretch": 1017,
+# Unified command vocabulary - consolidates behavior and robot commands
+UNIFIED_COMMANDS = {
+    # Greeting & Basic Interaction
+    'hello_gesture': 1016,      # Go2 "Hello"
+    'wave_back': 1016,          # Go2 "Hello"
+    'fist_bump': 1016,          # Go2 "Hello"
+    'acknowledge': 1016,        # Go2 "Hello"
+    'greeting': 1016,           # Go2 "Hello"
     
-    # Entertainment
-    "Dance1": 1022,
-    "Dance2": 1023,
-    "WiggleHips": 1033,
-    "FingerHeart": 1036,
+    # Entertainment & Fun
+    'happy_dance': 1022,        # Go2 "Dance1"
+    'peace_response': 1036,     # Go2 "FingerHeart"
     
-    # Athletic
-    "FrontFlip": 1030,
-    "FrontJump": 1031,
-    "MoonWalk": 1305,
-    "Handstand": 1301,
+    # Physical Actions
+    'look_at_point': 1017,      # Go2 "Stretch"
+    'stretch': 1017,            # Go2 "Stretch"
+    
+    # Advanced Entertainment
+    'dance_performance': 1023,  # Go2 "Dance2"
+    
+    # Future Navigation Commands (placeholder)
+    'step_back': 'navigation',
+    'approach_human': 'navigation',
+    'farewell': 1016,           # Go2 "Hello" for now
 }
 
-# Gesture to robot command mapping (using actual detected gesture names)
-GESTURE_COMMAND_MAP = {
-    "right_fist": "Hello",
-    "left_fist": "Hello",
-    "right_open_hand": "Stretch", 
-    "left_open_hand": "Stretch",
-    "hands_visible": "Hello",
-    "right_thumbs_up": "FingerHeart",
-    "left_thumbs_up": "FingerHeart",
-    "right_peace_sign": "Dance1",
-    "left_peace_sign": "Dance1",
-    "right_pointing": "Dance2",
-    "left_pointing": "Dance2",
+# Command execution times (seconds) - based on actual robot gesture duration
+COMMAND_EXECUTION_TIMES = {
+    'hello_gesture': 12.0,      # Full greeting sequence
+    'wave_back': 10.0,          # Wave gesture
+    'fist_bump': 10.0,          # Handshake gesture
+    'acknowledge': 8.0,         # Simple acknowledgment
+    'greeting': 12.0,           # Full greeting
+    'happy_dance': 18.0,        # Full dance routine
+    'peace_response': 8.0,      # Finger heart gesture
+    'look_at_point': 6.0,       # Look and point
+    'stretch': 6.0,             # Simple stretch
+    'dance_performance': 20.0,  # Extended dance
+    'step_back': 2.0,           # Quick safety move
+    'approach_human': 4.0,      # Movement command
+    'farewell': 10.0,           # Farewell gesture
+}
+
+# Direct gesture to command mapping (using actual detected gesture names)
+GESTURE_TO_COMMAND_MAP = {
+    "right_fist": "fist_bump",
+    "left_fist": "fist_bump",
+    "right_open_hand": "stretch", 
+    "left_open_hand": "stretch",
+    "hands_visible": "hello_gesture",
+    "right_thumbs_up": "peace_response",
+    "left_thumbs_up": "peace_response",
+    "right_peace_sign": "happy_dance",
+    "left_peace_sign": "happy_dance",
+    "right_pointing": "dance_performance",
+    "left_pointing": "dance_performance",
 }
 
 class InteractionManagerNode(Node):
@@ -134,8 +156,8 @@ class InteractionManagerNode(Node):
         # Command rate limiting
         self.last_command_time = {}  # Dict[command_type, timestamp]
         self.command_rate_limit = 1.0  # seconds between same commands
-        self.proximity_command_rate_limit = 2.0  # seconds between proximity commands
-        self.last_proximity_command = 0.0
+        self.proximity_command_rate_limit = 5.0  # seconds between proximity commands
+        self.last_proximity_command_per_human = {}  # Dict[human_id, timestamp]
         
         # State machine parameters
         self.state_timeout = self.get_parameter('state_timeout').value
@@ -176,10 +198,10 @@ class InteractionManagerNode(Node):
             10
         )
         
-        # Behavior commands
-        self.commands_pub = self.create_publisher(
+        # Command logging for tracking and debugging
+        self.command_log_pub = self.create_publisher(
             String, 
-            '/interaction/commands', 
+            '/interaction/command_log', 
             10
         )
         
@@ -214,13 +236,7 @@ class InteractionManagerNode(Node):
             10
         )
         
-        # Gesture recognition results
-        self.gestures_sub = self.create_subscription(
-            String,
-            '/human_detection/gestures',
-            self.gestures_callback,
-            10
-        )
+
         
         # Proximity information
         self.proximity_sub = self.create_subscription(
@@ -274,22 +290,7 @@ class InteractionManagerNode(Node):
         except Exception as e:
             self.get_logger().error(f'Error processing people data: {e}')
     
-    def gestures_callback(self, msg: String):
-        """Handle gesture recognition results"""
-        try:
-            data = json.loads(msg.data)
-            human_id = data.get('human_id', 0)
-            gestures = data.get('gestures', [])
-            
-            with self.state_lock:
-                # Fix: Store gestures per human_id, not replace entire dictionary
-                self.active_gestures[human_id] = gestures
-            
-            # Process gestures for interaction
-            self.process_human_gestures(data)
-            
-        except Exception as e:
-            self.get_logger().error(f'Error processing gestures: {e}')
+
     
     def proximity_callback(self, msg: String):
         """Handle proximity information"""
@@ -412,17 +413,52 @@ class InteractionManagerNode(Node):
         except Exception as e:
             self.get_logger().error(f'Error starting interaction with human {human_id}: {e}')
     
-    def send_robot_command(self, command_name: str, human_id: int = None) -> bool:
-        """Send robot command directly to Go2 driver (same pattern as Go2 UI)"""
+    def execute_command(self, command: str, human_id: int, context: dict = None) -> bool:
+        """Execute unified command with proper logging and tracking"""
         try:
-            if command_name not in ROBOT_COMMANDS:
-                self.get_logger().error(f"Unknown robot command: {command_name}")
+            current_time = time.time()
+            command_id = f"{command}_{human_id}_{int(current_time)}"
+            
+            # Check if command exists in unified vocabulary
+            if command not in UNIFIED_COMMANDS:
+                self.get_logger().error(f"Unknown command: {command}")
+                self.publish_command_log(command_id, command, human_id, 'failed', 'unknown_command', context)
                 return False
             
+            api_id = UNIFIED_COMMANDS[command]
+            
+            # Handle different command types
+            if isinstance(api_id, int):
+                # Robot gesture command
+                success = self.send_robot_gesture(api_id, command, human_id)
+                status = 'success' if success else 'failed'
+            elif api_id == 'navigation':
+                # Future: Navigation command
+                self.get_logger().info(f'Navigation command {command} queued for future implementation')
+                status = 'queued'
+                success = True
+            else:
+                self.get_logger().error(f"Invalid command type for {command}: {api_id}")
+                status = 'failed'
+                success = False
+            
+            # Log the command execution
+            self.publish_command_log(command_id, command, human_id, status, None, context)
+            
+            return success
+            
+        except Exception as e:
+            self.get_logger().error(f'Error executing command {command}: {e}')
+            self.publish_command_log(command_id, command, human_id, 'failed', str(e), context)
+            return False
+    
+    def send_robot_gesture(self, api_id: int, command_name: str, human_id: int = None) -> bool:
+        """Send robot gesture command to Go2 driver"""
+        try:
             # Create WebRTC request message
             req = WebRtcReq()
             req.id = 0  # Auto-assigned
-            req.api_id = ROBOT_COMMANDS[command_name]
+            req.api_id = api_id
             req.topic = "rt/api/sport/request"  # Standard sport mode topic
             req.parameter = str(req.api_id)
             req.priority = 0  # Normal priority
@@ -432,39 +468,35 @@ class InteractionManagerNode(Node):
             
             # Log the command
             human_info = f" for human {human_id}" if human_id else ""
-            self.get_logger().info(f'Robot command sent: {command_name} (API ID: {req.api_id}){human_info}')
-            
-            # Publish interaction event
-            event_msg = String()
-            event_data = {
-                'event': 'robot_command_sent',
-                'command': command_name,
-                'human_id': human_id,
-                'timestamp': time.time()
-            }
-            event_msg.data = json.dumps(event_data)
-            self.events_pub.publish(event_msg)
+            self.get_logger().info(f'Robot gesture sent: {command_name} (API ID: {req.api_id}){human_info}')
             
             return True
             
         except Exception as e:
-            self.get_logger().error(f'Error sending robot command {command_name}: {e}')
+            self.get_logger().error(f'Error sending robot gesture {command_name}: {e}')
             return False
     
-    def _map_behavior_to_robot_command(self, behavior_command: str) -> Optional[str]:
-        """Map behavior command to robot command"""
-        # Map behavior commands to robot commands
-        behavior_to_robot_map = {
-            'hello_gesture': 'Hello',
-            'wave_back': 'Hello',
-            'fist_bump': 'Hello',
-            'happy_dance': 'Dance1',
-            'peace_response': 'FingerHeart',
-            'acknowledge': 'Hello',
-            'look_at_point': 'Stretch',
-        }
-        
-        return behavior_to_robot_map.get(behavior_command)
+    def publish_command_log(self, command_id: str, command: str, human_id: int, status: str, error: str = None, context: dict = None):
+        """Publish rich command log for tracking and debugging"""
+        try:
+            log_msg = String()
+            log_data = {
+                'command_id': command_id,
+                'command': command,
+                'human_id': human_id,
+                'timestamp': time.time(),
+                'status': status,  # success/failed/rate_limited/queued
+                'error': error,
+                'context': context or {},
+                'api_id': UNIFIED_COMMANDS.get(command, None)
+            }
+            log_msg.data = json.dumps(log_data)
+            self.command_log_pub.publish(log_msg)
+            
+        except Exception as e:
+            self.get_logger().error(f'Error publishing command log: {e}')
+    
+
     
     def process_human_gestures(self, gesture_data: Dict):
         """Process gestures with smart context-aware logic"""
@@ -493,16 +525,25 @@ class InteractionManagerNode(Node):
                 
                 # Only respond to NEW gestures
                 if gesture_state == 'new':
+                    # Create context for command logging
+                    context = {
+                        'gesture': gesture,
+                        'distance': distance,
+                        'zone': zone,
+                        'human_state': self.human_states.get(human_id, 'unknown').value if human_id in self.human_states else 'unknown'
+                    }
+                    
+                    # Try smart context-aware response first
                     response = self.smart_gesture_response(human_id, gesture, distance, zone)
                     if response:
-                        self.queue_command(human_id, response, CommandPriority.GESTURE_RESPONSE)
+                        self.queue_command(human_id, response, CommandPriority.GESTURE_RESPONSE, context)
                         self.get_logger().info(f'Smart response to "{gesture}" from human {human_id}: {response}')
                     else:
-                        # Check for direct gesture-to-robot command mapping
-                        if gesture in GESTURE_COMMAND_MAP:
-                            robot_command = GESTURE_COMMAND_MAP[gesture]
-                            self.send_robot_command(robot_command, human_id)
-                            self.get_logger().info(f'Direct robot command "{robot_command}" for gesture "{gesture}" from human {human_id}')
+                        # Fallback to direct gesture mapping (still goes through queue_command)
+                        if gesture in GESTURE_TO_COMMAND_MAP:
+                            command = GESTURE_TO_COMMAND_MAP[gesture]
+                            self.queue_command(human_id, command, CommandPriority.GESTURE_RESPONSE, context)
+                            self.get_logger().info(f'Direct command "{command}" for gesture "{gesture}" from human {human_id}')
                         else:
                             self.get_logger().debug(f'Ignoring gesture "{gesture}" from human {human_id} (context: {self.human_states.get(human_id, "unknown")})')
                         
@@ -622,9 +663,15 @@ class InteractionManagerNode(Node):
                     closest_human_id = human_id
             
             if closest_human_id and self.current_state == InteractionState.INTERACTION:
-                # Safety-first proximity handling
+                current_time = time.time()
+                
+                # Safety-first proximity handling with debouncing
                 if distance < 0.8:  # Too close - safety priority
-                    self.queue_command(closest_human_id, 'step_back', CommandPriority.SAFETY)
+                    # Check if we recently sent step_back to this human
+                    last_proximity_time = self.last_proximity_command_per_human.get(closest_human_id, 0)
+                    if current_time - last_proximity_time > self.proximity_command_rate_limit:
+                        self.queue_command(closest_human_id, 'step_back', CommandPriority.SAFETY)
+                        self.last_proximity_command_per_human[closest_human_id] = current_time
                 elif distance > 4.0 and zone == 'far':  # Too far - approach if was interacting
                     human_state = self.human_states.get(closest_human_id, HumanInteractionState.UNKNOWN)
                     if human_state in [HumanInteractionState.ACTIVE_INTERACTION, HumanInteractionState.IDLE_PRESENCE]:
@@ -720,34 +767,10 @@ class InteractionManagerNode(Node):
         self.send_behavior_command_with_rate_limit(command, current_time)
     
     def send_behavior_command_with_rate_limit(self, command: str, current_time: float) -> bool:
-        """Send behavior command to robot with rate limiting"""
+        """Legacy method - now routes through unified command system"""
         try:
-            # Check rate limiting
-            if command in self.last_command_time:
-                time_since_last = current_time - self.last_command_time[command]
-                if time_since_last < self.command_rate_limit:
-                    self.get_logger().debug(f'Rate limiting command: {command} (last sent {time_since_last:.1f}s ago)')
-                    return False  # Command was rate limited
-            
-            # Send command
-            command_msg = String()
-            command_data = {
-                'command': command,
-                'timestamp': current_time,
-                'priority': 'normal'
-            }
-            command_msg.data = json.dumps(command_data)
-            self.commands_pub.publish(command_msg)
-            
-            # Check if this command maps to a robot gesture and send robot command
-            robot_command = self._map_behavior_to_robot_command(command)
-            if robot_command:
-                self.send_robot_command(robot_command)
-            
-            # Update rate limiting tracker
-            self.last_command_time[command] = current_time
-            
-            self.get_logger().debug(f'Sent behavior command: {command}')
+            # Route through unified system with default human_id and priority
+            self.queue_command(0, command, CommandPriority.GESTURE_RESPONSE, {'legacy_call': True})
             return True
             
         except Exception as e:
@@ -1116,8 +1139,8 @@ class InteractionManagerNode(Node):
             self.get_logger().error(f'Error in smart gesture response: {e}')
             return None
     
-    def queue_command(self, human_id: int, command: str, priority: CommandPriority):
-        """Queue command with priority and coordination"""
+    def queue_command(self, human_id: int, command: str, priority: CommandPriority, context: dict = None):
+        """Queue command with priority, rate limiting, and unified execution"""
         try:
             current_time = time.time()
             
@@ -1125,23 +1148,30 @@ class InteractionManagerNode(Node):
             if human_id in self.last_command_per_human:
                 last_command, last_time = self.last_command_per_human[human_id]
                 
-                # Priority-based cooldown
+                # Command-specific cooldown based on execution time
                 if priority == CommandPriority.SAFETY:
                     cooldown = 0.5  # Safety commands have minimal cooldown
                 elif priority == CommandPriority.STATE_TRANSITION:
                     cooldown = self.state_transition_cooldown
                 else:
-                    cooldown = self.command_cooldown_per_human
+                    # Use command-specific execution time for cooldown
+                    cooldown = COMMAND_EXECUTION_TIMES.get(command, self.command_cooldown_per_human)
                 
                 if current_time - last_time < cooldown:
                     self.get_logger().debug(f'Command {command} to human {human_id} blocked by cooldown')
+                    # Log rate limited command
+                    command_id = f"{command}_{human_id}_{int(current_time)}"
+                    rate_limit_context = context.copy() if context else {}
+                    rate_limit_context['cooldown_remaining'] = cooldown - (current_time - last_time)
+                    rate_limit_context['priority'] = priority.name
+                    self.publish_command_log(command_id, command, human_id, 'rate_limited', None, rate_limit_context)
                     return
             
-            # Execute command immediately (for now - could implement actual queue later)
-            self.send_behavior_command(command)
-            self.last_command_per_human[human_id] = (command, current_time)
-            
-            self.get_logger().debug(f'Executed {priority.name} command "{command}" for human {human_id}')
+            # Execute command through unified pipeline
+            success = self.execute_command(command, human_id, context)
+            if success:
+                self.last_command_per_human[human_id] = (command, current_time)
+                self.get_logger().debug(f'Executed {priority.name} command "{command}" for human {human_id}')
             
         except Exception as e:
             self.get_logger().error(f'Error queuing command: {e}')
