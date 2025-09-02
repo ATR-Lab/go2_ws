@@ -62,6 +62,12 @@ class InteractionManagerNode(Node):
         self.interaction_cooldown = {}  # Dict[human_id, last_interaction_time]
         self.human_timeout = 5.0  # seconds
         
+        # Command rate limiting
+        self.last_command_time = {}  # Dict[command_type, timestamp]
+        self.command_rate_limit = 1.0  # seconds between same commands
+        self.proximity_command_rate_limit = 2.0  # seconds between proximity commands
+        self.last_proximity_command = 0.0
+        
         # State machine parameters
         self.state_timeout = self.get_parameter('state_timeout').value
         self.max_interaction_time = self.get_parameter('max_interaction_time').value
@@ -196,9 +202,12 @@ class InteractionManagerNode(Node):
         """Handle gesture recognition results"""
         try:
             data = json.loads(msg.data)
+            human_id = data.get('human_id', 0)
+            gestures = data.get('gestures', [])
             
             with self.state_lock:
-                self.active_gestures = data.get('gestures', [])
+                # Fix: Store gestures per human_id, not replace entire dictionary
+                self.active_gestures[human_id] = gestures
             
             # Process gestures for interaction
             self.process_gestures(data)
@@ -356,7 +365,10 @@ class InteractionManagerNode(Node):
                     self.get_logger().debug(f'Gesture "{gesture}" ENDED for human {human_id}')
                     
         except Exception as e:
+            import traceback
             self.get_logger().error(f'Error processing human gestures: {e}')
+            self.get_logger().error(f'Traceback: {traceback.format_exc()}')
+            self.get_logger().error(f'Gesture data: {gesture_data}')
     
     def update_interaction_queue(self, prioritized_gestures: List[Dict]):
         """Update the interaction queue based on priority"""
@@ -452,17 +464,24 @@ class InteractionManagerNode(Node):
                         self.send_behavior_command(response)
     
     def process_proximity(self, proximity_data: Dict):
-        """Process proximity information and adjust behaviors"""
+        """Process proximity information and adjust behaviors with rate limiting"""
         zone = proximity_data.get('zone', 'far')
         distance = proximity_data.get('distance', float('inf'))
+        current_time = time.time()
         
         with self.state_lock:
             if self.current_state == InteractionState.INTERACTION:
+                # Rate limit proximity commands to prevent spam
+                if current_time - self.last_proximity_command < self.proximity_command_rate_limit:
+                    return  # Skip this proximity command due to rate limiting
+                
                 # Adjust behavior based on proximity
                 if distance < 1.0:  # Very close
-                    self.send_behavior_command('step_back')
+                    if self.send_behavior_command_with_rate_limit('step_back', current_time):
+                        self.last_proximity_command = current_time
                 elif distance > 3.0:  # Too far
-                    self.send_behavior_command('approach_human')
+                    if self.send_behavior_command_with_rate_limit('approach_human', current_time):
+                        self.last_proximity_command = current_time
     
     def transition_to_state(self, new_state: InteractionState):
         """Transition to a new interaction state"""
@@ -549,21 +568,39 @@ class InteractionManagerNode(Node):
         return response
     
     def send_behavior_command(self, command: str):
-        """Send behavior command to robot"""
+        """Send behavior command to robot (legacy method - calls rate limited version)"""
+        current_time = time.time()
+        self.send_behavior_command_with_rate_limit(command, current_time)
+    
+    def send_behavior_command_with_rate_limit(self, command: str, current_time: float) -> bool:
+        """Send behavior command to robot with rate limiting"""
         try:
+            # Check rate limiting
+            if command in self.last_command_time:
+                time_since_last = current_time - self.last_command_time[command]
+                if time_since_last < self.command_rate_limit:
+                    self.get_logger().debug(f'Rate limiting command: {command} (last sent {time_since_last:.1f}s ago)')
+                    return False  # Command was rate limited
+            
+            # Send command
             command_msg = String()
             command_data = {
                 'command': command,
-                'timestamp': time.time(),
+                'timestamp': current_time,
                 'priority': 'normal'
             }
             command_msg.data = json.dumps(command_data)
             self.commands_pub.publish(command_msg)
             
+            # Update rate limiting tracker
+            self.last_command_time[command] = current_time
+            
             self.get_logger().debug(f'Sent behavior command: {command}')
+            return True
             
         except Exception as e:
             self.get_logger().error(f'Error sending behavior command: {e}')
+            return False
     
     def send_speech(self, text: str):
         """Send text-to-speech request"""
@@ -632,16 +669,112 @@ class InteractionManagerNode(Node):
         with self.state_lock:
             # Check if humans are still detected
             if self.detected_humans:
-                # Remove stale detections
-                self.detected_humans = [
-                    human for human in self.detected_humans
-                    if current_time - human['timestamp'] < 3.0
-                ]
+                # Remove stale detections (now using dictionary format)
+                expired_humans = []
+                for human_id, human_data in self.detected_humans.items():
+                    if current_time - human_data['timestamp'] > 3.0:
+                        expired_humans.append(human_id)
+                
+                # Clean up expired humans
+                for human_id in expired_humans:
+                    del self.detected_humans[human_id]
+                    # Clean up related data
+                    if human_id in self.active_gestures:
+                        del self.active_gestures[human_id]
+                    if human_id == self.active_interaction_human:
+                        self.active_interaction_human = None
+                    if human_id in self.interaction_queue:
+                        self.interaction_queue.remove(human_id)
             
             # If no humans detected and in interaction state, resume patrol
             if (not self.detected_humans and 
                 self.current_state == InteractionState.INTERACTION):
                 self.transition_to_state(InteractionState.RESUME_PATROL)
+
+
+    def detect_movement_direction(self, human_id: int) -> str:
+        """Detect if human is approaching, leaving, or stationary"""
+        try:
+            if human_id not in self.human_distance_history:
+                return 'unknown'
+            
+            distance_history = self.human_distance_history[human_id]
+            if len(distance_history) < 2:
+                return 'unknown'
+            
+            # Compare recent distances to detect trend
+            recent_distances = [d for d, t in distance_history[-3:]]
+            
+            if len(recent_distances) >= 2:
+                # Calculate average change
+                distance_change = recent_distances[-1] - recent_distances[0]
+                
+                if distance_change < -0.5:  # Getting closer
+                    return 'approaching'
+                elif distance_change > 0.5:  # Getting farther
+                    return 'leaving'
+                else:
+                    return 'stationary'
+            
+            return 'unknown'
+            
+        except Exception as e:
+            self.get_logger().error(f'Error detecting movement: {e}')
+            return 'unknown'
+    
+    def update_interaction_state(self, human_id: int, zone: str, movement: str):
+        """Update human interaction state based on proximity and movement"""
+        try:
+            current_state = self.human_interaction_states.get(human_id, 'unknown')
+            new_state = current_state
+            
+            # State transition logic
+            if zone == 'far':
+                if movement == 'approaching':
+                    new_state = 'approaching'
+                else:
+                    new_state = 'far_away'
+            
+            elif zone == 'approach':
+                if movement == 'approaching':
+                    new_state = 'approaching'
+                elif movement == 'leaving':
+                    new_state = 'leaving'
+                else:
+                    new_state = 'nearby'
+            
+            elif zone == 'interaction':
+                if movement == 'leaving':
+                    new_state = 'leaving'
+                elif not self.human_greeting_status.get(human_id, False):
+                    new_state = 'greeting_needed'
+                else:
+                    # Determine if actively interacting or just hanging out
+                    current_time = time.time()
+                    last_gesture_time = 0
+                    
+                    # Check when we last responded to this human
+                    if human_id in self.interaction_cooldown:
+                        last_gesture_time = self.interaction_cooldown[human_id]
+                    
+                    # If no recent interaction, consider them idle
+                    if current_time - last_gesture_time > 30.0:  # 30 seconds
+                        new_state = 'idle_together'
+                    else:
+                        new_state = 'conversing'
+            
+            # Update state if changed
+            if new_state != current_state:
+                self.human_interaction_states[human_id] = new_state
+                self.get_logger().debug(f'Human {human_id} state: {current_state} → {new_state} (zone: {zone}, movement: {movement})')
+                
+                # Trigger farewell if leaving
+                if new_state == 'leaving' and current_state in ['conversing', 'idle_together']:
+                    self.send_behavior_command('farewell')
+                    self.get_logger().info(f'Human {human_id} is leaving - sending farewell')
+            
+        except Exception as e:
+            self.get_logger().error(f'Error updating interaction state: {e}')
 
 
 def main(args=None):

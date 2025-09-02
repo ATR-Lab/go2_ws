@@ -91,8 +91,14 @@ class HumanDetectionNode(Node):
         # Gesture state management
         self.gesture_history = []  # List of (timestamp, gestures) tuples
         self.last_gesture_responses = {}  # Dict[human_id, Dict[gesture, timestamp]]
-        self.gesture_debounce_time = 2.0  # seconds
+        self.gesture_debounce_time = 5.0  # seconds - balanced for stability and responsiveness
         self.gesture_rate_limit = 1.0  # max 1 response per gesture per second
+        
+        # Gesture stability tracking
+        self.gesture_stability_buffer = {}  # Dict[human_id, Dict[gesture, List[timestamps]]]
+        self.gesture_stability_window = 0.8  # seconds - require gesture to be stable for this long (reduced)
+        self.gesture_stability_threshold = 0.6  # 60% of frames must show same gesture (reduced)
+        self.min_gesture_confidence_frames = 3  # minimum frames to confirm gesture (reduced)
         
         # Gesture state tracking
         self.gesture_states = {}  # Dict[human_id, Dict[gesture, GestureState]]
@@ -498,13 +504,18 @@ class HumanDetectionNode(Node):
                 sequence_gestures = self.detect_gesture_sequences()
                 gestures.extend(sequence_gestures)
             
-            # If no gestures detected, check if hands are present
+            # If no gestures detected, check if hands are present (but be more conservative)
             if not gestures and results.multi_hand_landmarks:
-                # Only add hands_visible if hands are in this human's bbox
+                # Only add hands_visible if hands are in this human's bbox AND stable
+                hands_detected = False
                 for hand_landmarks in results.multi_hand_landmarks:
                     if self.is_hand_in_human_bbox(hand_landmarks, human_bbox, rgb_frame.shape):
-                        gestures = ["hands_visible"]
+                        hands_detected = True
                         break
+                
+                # Only report hands_visible if we have stable hand detection
+                if hands_detected and self.should_respond_to_gesture(human_id, "hands_visible", current_time):
+                    gestures = ["hands_visible"]
             
             # Update gesture states
             gesture_states = self.update_gesture_states(human_id, gestures, current_time)
@@ -544,25 +555,57 @@ class HumanDetectionNode(Node):
             return False
     
     def should_respond_to_gesture(self, human_id: int, gesture: str, current_time: float) -> bool:
-        """Check if we should respond to this gesture (debouncing)"""
+        """Check if we should respond to this gesture with enhanced stability checking"""
         try:
             # Initialize gesture history for this human if needed
             if human_id not in self.last_gesture_responses:
                 self.last_gesture_responses[human_id] = {}
+            if human_id not in self.gesture_stability_buffer:
+                self.gesture_stability_buffer[human_id] = {}
             
-            # Check if we've responded to this gesture recently
+            # Initialize stability buffer for this gesture
+            if gesture not in self.gesture_stability_buffer[human_id]:
+                self.gesture_stability_buffer[human_id][gesture] = []
+            
+            # Add current detection to stability buffer
+            stability_buffer = self.gesture_stability_buffer[human_id][gesture]
+            stability_buffer.append(current_time)
+            
+            # Clean old entries from stability buffer
+            cutoff_time = current_time - self.gesture_stability_window
+            stability_buffer[:] = [t for t in stability_buffer if t > cutoff_time]
+            
+            # Check if gesture is stable enough
+            if len(stability_buffer) < self.min_gesture_confidence_frames:
+                return False  # Not enough frames to confirm gesture
+            
+            # Check temporal stability - gesture should be consistent
+            stability_ratio = len(stability_buffer) / (self.gesture_stability_window * 10)  # Assuming ~10 FPS
+            if stability_ratio < self.gesture_stability_threshold:
+                return False  # Gesture not stable enough
+            
+            # Check if we've responded to this gesture recently (enhanced debouncing)
             if gesture in self.last_gesture_responses[human_id]:
                 last_response_time = self.last_gesture_responses[human_id][gesture]
                 if current_time - last_response_time < self.gesture_debounce_time:
                     return False  # Too soon, debounce this gesture
             
+            # Check if we've responded to ANY gesture from this human recently (global cooldown)
+            for prev_gesture, prev_time in self.last_gesture_responses[human_id].items():
+                if current_time - prev_time < 2.0:  # 2 second global cooldown per human (reduced)
+                    return False
+            
             # Record this gesture response
             self.last_gesture_responses[human_id][gesture] = current_time
+            
+            # Clear stability buffer after successful response
+            self.gesture_stability_buffer[human_id][gesture] = []
+            
             return True
             
         except Exception as e:
             self.get_logger().error(f'Error in gesture debouncing: {e}')
-            return True  # Default to allowing gesture
+            return False  # Default to rejecting gesture on error
     
     def update_gesture_states(self, human_id: int, current_gestures: List[str], current_time: float) -> Dict:
         """Update gesture states for a human (NEW → ONGOING → ENDED)"""
@@ -617,7 +660,12 @@ class HumanDetectionNode(Node):
                 if gesture in human_start_times:
                     del human_start_times[gesture]
             
-            return current_states
+            # Convert enum values to strings for JSON serialization
+            serializable_states = {}
+            for gesture, state in current_states.items():
+                serializable_states[gesture] = state.value if hasattr(state, 'value') else str(state)
+            
+            return serializable_states
             
         except Exception as e:
             self.get_logger().error(f'Error updating gesture states: {e}')
@@ -914,6 +962,7 @@ class HumanDetectionNode(Node):
                     prioritized.append({
                         'human_id': human_id,
                         'gestures': gesture_result['gestures'],
+                        'gesture_states': gesture_result.get('gesture_states', {}),
                         'priority_score': priority_score,
                         'timestamp': gesture_result['timestamp']
                     })
