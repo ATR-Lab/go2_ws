@@ -86,6 +86,9 @@ class InteractionManagerNode(Node):
         self.command_cooldown_per_human = 3.0  # seconds between commands to same human
         self.state_transition_cooldown = 5.0  # seconds between state-based commands
         
+        # Human interaction memory system
+        self.human_interaction_history = {}  # Dict[human_id, interaction_history]
+        
         # Priority and interaction management
         self.max_simultaneous_interactions = 1  # Only interact with one human at a time
         self.interaction_cooldown = {}  # Dict[human_id, last_interaction_time]
@@ -557,8 +560,8 @@ class InteractionManagerNode(Node):
     
     def end_interaction(self):
         """End human interaction sequence"""
-        # Send farewell behavior
-        self.send_behavior_command('farewell')
+        # Note: Farewell is now handled by smart state machine, not here
+        # This prevents double farewell commands
         
         # Send farewell speech
         self.send_speech("See you later! Come back soon!")
@@ -828,6 +831,16 @@ class InteractionManagerNode(Node):
                 self.human_states[human_id] = HumanInteractionState.UNKNOWN
                 self.human_state_timestamps[human_id] = current_time
                 self.human_last_interaction[human_id] = 0
+                
+                # Initialize interaction history
+                if human_id not in self.human_interaction_history:
+                    self.human_interaction_history[human_id] = {
+                        'first_seen': current_time,
+                        'last_interaction': 0,
+                        'total_interactions': 0,
+                        'last_farewell': 0,
+                        'interaction_type': 'first_time'
+                    }
             
             # Update distance history
             if human_id not in self.human_distance_history:
@@ -896,6 +909,8 @@ class InteractionManagerNode(Node):
                     # Send farewell if was interacting
                     if current_state in [HumanInteractionState.ACTIVE_INTERACTION, HumanInteractionState.IDLE_PRESENCE]:
                         self.queue_command(human_id, 'farewell', CommandPriority.STATE_TRANSITION)
+                        # Record farewell in interaction history
+                        self.human_interaction_history[human_id]['last_farewell'] = current_time
                         
         except Exception as e:
             self.get_logger().error(f'Error updating human interaction state: {e}')
@@ -926,10 +941,27 @@ class InteractionManagerNode(Node):
                 # Full gesture processing based on interaction state
                 
                 if human_state == HumanInteractionState.FIRST_CONTACT:
-                    # First interaction - respond to greeting gestures
+                    # First interaction - respond to greeting gestures with context awareness
                     if gesture in ['left_wave', 'right_wave', 'wave', 'hands_visible']:
                         self.human_last_interaction[human_id] = current_time
-                        return 'hello_gesture'
+                        
+                        # Update interaction history
+                        history = self.human_interaction_history[human_id]
+                        history['last_interaction'] = current_time
+                        history['total_interactions'] += 1
+                        
+                        # Determine greeting type based on return status
+                        return_type = self.detect_return_type(human_id, current_time)
+                        greeting_responses = {
+                            'first_time': 'hello_gesture',
+                            'quick_return': 'wave_back',  # Welcome back!
+                            'short_return': 'hello_gesture',  # Good to see you again
+                            'long_return': 'hello_gesture'  # Hello again
+                        }
+                        
+                        response = greeting_responses.get(return_type, 'hello_gesture')
+                        self.get_logger().info(f'Greeting human {human_id} with {response} (return_type: {return_type})')
+                        return response
                     return None  # Wait for proper greeting
                 
                 elif human_state == HumanInteractionState.ACTIVE_INTERACTION:
@@ -1004,6 +1036,36 @@ class InteractionManagerNode(Node):
             
         except Exception as e:
             self.get_logger().error(f'Error queuing command: {e}')
+    
+    def detect_return_type(self, human_id: int, current_time: float) -> str:
+        """Detect if human is returning and what type of return it is"""
+        try:
+            if human_id not in self.human_interaction_history:
+                return 'first_time'
+            
+            history = self.human_interaction_history[human_id]
+            last_farewell = history.get('last_farewell', 0)
+            total_interactions = history.get('total_interactions', 0)
+            
+            # If no previous farewell, this is first time
+            if last_farewell == 0:
+                return 'first_time'
+            
+            # Calculate time since last farewell
+            time_away = current_time - last_farewell
+            
+            if time_away < 60:  # Less than 1 minute
+                return 'quick_return'
+            elif time_away < 300:  # Less than 5 minutes
+                return 'short_return'
+            elif total_interactions > 2:  # Frequent visitor
+                return 'long_return'
+            else:
+                return 'first_time'  # Treat as new if long time and few interactions
+                
+        except Exception as e:
+            self.get_logger().error(f'Error detecting return type: {e}')
+            return 'first_time'
 
 
 def main(args=None):
