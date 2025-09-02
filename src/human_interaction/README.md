@@ -23,10 +23,11 @@ The `human_interaction` package is the **core AI processing component** of the r
   - `/camera/image_raw` (sensor_msgs/Image): Camera feed
   - `/camera/camera_info` (sensor_msgs/CameraInfo): Camera calibration
 - **Publishes**:
-  - `/human_detection/people` (std_msgs/String): Human detection results (JSON)
-  - `/human_detection/gestures` (std_msgs/String): Gesture recognition results (JSON)
+  - `/human_detection/people` (std_msgs/String): Human detection results with tracking IDs (JSON)
+  - `/human_detection/gestures` (std_msgs/String): Per-human gesture recognition results (JSON)
+  - `/human_detection/combined_gestures` (std_msgs/String): Priority-ordered multi-human gestures (JSON)
   - `/human_detection/proximity` (std_msgs/String): Distance and zone information (JSON)
-  - `/human_detection/pose` (std_msgs/String): Body pose data (JSON)
+  - `/human_detection/pose` (geometry_msgs/PoseArray): Body pose landmarks
 
 **Parameters**:
 - `detection_confidence` (float, default: 0.6): YOLO confidence threshold
@@ -42,8 +43,8 @@ The `human_interaction` package is the **core AI processing component** of the r
 **Purpose**: Robot behavior state machine and interaction coordination
 - **Executable**: `ros2 run human_interaction interaction_manager_node`
 - **Subscribes**:
-  - `/human_detection/people`: Human detection data
-  - `/human_detection/gestures`: Gesture recognition data
+  - `/human_detection/people`: Human detection data with tracking IDs
+  - `/human_detection/combined_gestures`: Priority-ordered multi-human gestures
   - `/human_detection/proximity`: Proximity information
 - **Publishes**:
   - `/interaction/state` (std_msgs/String): Current interaction state (JSON)
@@ -61,24 +62,20 @@ The `human_interaction` package is the **core AI processing component** of the r
 - `enable_gesture_responses` (bool, default: true): Respond to gestures
 - `enable_speech_responses` (bool, default: true): Enable TTS responses
 
-#### 3. `gesture_recognition_node`
-**Purpose**: Advanced gesture analysis and sequence detection
-- **Executable**: `ros2 run human_interaction gesture_recognition_node`
-- **Subscribes**:
-  - `/human_detection/pose`: Body pose data
-  - `/human_detection/gestures`: Basic gesture data
-- **Publishes**:
-  - `/gesture_recognition/detailed_gestures`: Advanced gesture analysis
-  - `/gesture_recognition/gesture_sequences`: Gesture pattern detection
-  - `/gesture_recognition/gesture_confidence`: Confidence scoring
+
 
 ## AI Capabilities
 
-### Human Detection (YOLO)
-**Model**: YOLOv8 Nano (`yolov8n.pt`)
+### Human Detection & Tracking
+**Detection Model**: YOLOv8 Nano (`yolov8n.pt`)
+**Tracking Algorithm**: ByteTrack (robust multi-object tracking)
+
 - **Detection Class**: Humans (class 0)
 - **Confidence Scoring**: 0.0-1.0 range
 - **Bounding Box**: Pixel coordinates (x1, y1, x2, y2)
+- **Persistent Human IDs**: Maintains consistent tracking across frames
+- **Laggy Video Handling**: Optimized for WebRTC feeds with variable timing
+- **Dynamic FPS Adaptation**: Automatically adjusts to measured frame rates
 - **Distance Estimation**: Approximate distance based on bounding box size
 - **Zone Classification**: 
   - `interaction` (< 2m): Close engagement zone
@@ -104,15 +101,20 @@ The `human_interaction` package is the **core AI processing component** of the r
 | 👋 `wave` | Hand raised above wrist | Hand elevated + fingers up |
 | 👀 `hands_visible` | Hands detected, no specific gesture | Fallback detection |
 
-#### Gesture Sequences
+#### Gesture Sequences & States
+- **Gesture States**: NEW → ONGOING → ENDED lifecycle tracking
+- **Temporal Smoothing**: Adaptive stability windows for laggy video
+- **Multi-Human Attribution**: Gestures correctly assigned to specific humans
+- **Debouncing**: Prevents gesture spam with per-human cooldowns
+- **Priority System**: Closer humans get higher gesture priority
 - **Repeated Gestures**: Same gesture 3+ times in 1 second
 - **Gesture Combinations**: 
   - `wave_then_point`: Wave followed by pointing
   - `thumbs_up_then_peace`: Thumbs up followed by peace sign
 - **Temporal Analysis**: 2-second gesture history tracking
 
-### Interaction States
-The system manages these behavioral states:
+### Smart Interaction State Machine
+The system manages these behavioral states with intelligent multi-human handling:
 
 | State | Description | Triggers | Actions |
 |-------|-------------|----------|---------|
@@ -122,35 +124,66 @@ The system manages these behavioral states:
 | `COMMAND_EXECUTION` | Processing gesture command | Specific gesture detected | Execute corresponding behavior |
 | `RESUME_PATROL` | Returning to patrol | Interaction timeout/completion | Resume navigation |
 
+#### Smart Features
+- **Multi-Human Management**: Handles multiple people simultaneously with priority queues
+- **Context-Aware Greetings**: Recognizes returning humans and adjusts responses
+- **Human Memory**: Tracks interaction history per person (first_seen, last_interaction, total_interactions)
+- **Return Detection**: Differentiates between quick returns, short returns, and first-time visitors
+- **Command Rate Limiting**: Prevents spam with per-human, per-gesture cooldowns
+- **State Transition Smoothing**: Intelligent handoffs between multiple human interactions
+- **Proximity-Based Priority**: Closer humans get higher interaction priority
+
 ## Data Formats
 
-### Human Detection Output
+### Human Detection Output (with Tracking)
 ```json
 {
   "timestamp": 1234567890.123,
   "detection": {
+    "id": 42,
     "bbox": [x1, y1, x2, y2],
     "confidence": 0.85,
-    "class_id": 0,
-    "class_name": "person"
+    "class": "human",
+    "center": [cx, cy],
+    "area": 15000
   },
   "distance": 3.2,
-  "zone": "approach",
-  "frame_id": "camera_frame"
+  "zone": "approach"
 }
 ```
 
-### Gesture Recognition Output
+### Gesture Recognition Output (Per-Human)
 ```json
 {
   "timestamp": 1234567890.123,
+  "human_id": 42,
   "gestures": ["left_thumbs_up", "right_wave"],
-  "sequences": ["repeated_left_thumbs_up"],
-  "hand_count": 2,
-  "confidence": {
-    "left_thumbs_up": 0.92,
-    "right_wave": 0.87
+  "gesture_states": {
+    "left_thumbs_up": "new",
+    "right_wave": "ongoing"
   }
+}
+```
+
+### Combined Multi-Human Gestures
+```json
+{
+  "timestamp": 1234567890.123,
+  "prioritized_gestures": [
+    {
+      "human_id": 42,
+      "gestures": ["left_thumbs_up"],
+      "gesture_states": {"left_thumbs_up": "new"},
+      "priority_score": 15000.85
+    },
+    {
+      "human_id": 37,
+      "gestures": ["right_wave"],
+      "gesture_states": {"right_wave": "ongoing"},
+      "priority_score": 8500.72
+    }
+  ],
+  "total_humans": 2
 }
 ```
 
@@ -183,13 +216,15 @@ ros2 topic echo /human_detection/people
 
 ### 2. Complete Interaction System
 ```bash
-# Launch all interaction nodes
+# Launch core interaction nodes
 ros2 run human_interaction human_detection_node &
 ros2 run human_interaction interaction_manager_node &
-ros2 run human_interaction gesture_recognition_node &
 
 # Monitor interaction state
 ros2 topic echo /interaction/state
+
+# Monitor multi-human gestures
+ros2 topic echo /human_detection/combined_gestures
 ```
 
 ### 3. Gesture Testing
@@ -231,7 +266,8 @@ ros2 run human_interaction interaction_manager_node --ros-args -p interaction_zo
 - **GPU**: NVIDIA GPU recommended for YOLO inference
 - **CPU**: Multi-core processor for MediaPipe processing
 - **Memory**: 4GB+ RAM for model loading
-- **Camera**: 30 FPS capable webcam or robot camera
+- **Camera**: Variable FPS camera (system adapts to 3-30 FPS)
+- **Network**: Stable connection for WebRTC robot feeds
 
 ### Optimization Tips
 ```bash
@@ -297,12 +333,17 @@ wget https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.pt -
 - Verify lighting conditions
 - Adjust detection confidence: `-p detection_confidence:=0.4`
 - Check YOLO model compatibility
+- Monitor FPS: `ros2 topic hz /camera/image_raw`
+- Check ByteTrack tracking: Look for consistent human IDs
 
 ### Gesture Recognition Issues
 - Ensure hands are clearly visible
 - Check MediaPipe installation: `python3 -c "import mediapipe; print('OK')"`
 - Verify hand landmarks: Enable debug logging
 - Test with simple gestures first (thumbs up, open hand)
+- Check gesture attribution: Ensure hands are within human bounding boxes
+- Monitor gesture states: Look for NEW → ONGOING → ENDED transitions
+- Verify FPS adaptation: System should adapt to measured frame rates
 
 ### Performance Issues
 ```bash
@@ -331,6 +372,8 @@ ros2 param get /interaction_manager_node state_timeout
 2. Add gesture logic based on hand landmarks
 3. Update gesture classification in `recognize_gestures()`
 4. Test with various hand positions and lighting
+5. Consider gesture state transitions (NEW/ONGOING/ENDED)
+6. Test multi-human scenarios for proper attribution
 
 ### Extending Interaction States
 1. Add new state to `InteractionState` enum
@@ -360,11 +403,14 @@ ros2 param get /interaction_manager_node state_timeout
 - `numpy`: Numerical computing
 - `json`: Data serialization
 - `threading`: Concurrent processing
+- `boxmot`: ByteTrack and other SOTA tracking algorithms
 
-### AI Models
+### AI Models & Algorithms
 - **YOLOv8 Nano**: Human detection model (~6MB)
-- **MediaPipe Hands**: Hand landmark detection
-- **MediaPipe Pose**: Body pose estimation
+- **ByteTrack**: Multi-object tracking for persistent human IDs
+- **MediaPipe Hands**: Hand landmark detection with gesture analysis
+- **MediaPipe Pose**: Body pose estimation (optional)
+- **Custom State Machine**: Smart multi-human interaction management
 
 ## See Also
 - [`test_camera` package](../test_camera/README.md): Camera testing and visualization
