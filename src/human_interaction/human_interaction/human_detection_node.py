@@ -85,7 +85,7 @@ class HumanDetectionNode(Node):
         # Human tracking state
         self.tracked_humans = {}  # Dict[human_id, human_data]
         self.next_human_id = 1
-        self.max_tracking_distance = 100  # pixels
+        self.max_tracking_distance = 250  # pixels - increased for laggy video feeds
         self.human_timeout = 3.0  # seconds
         
         # Gesture state management
@@ -391,29 +391,85 @@ class HumanDetectionNode(Node):
             for human_id, human_data in self.tracked_humans.items():
                 # Calculate distance between current detection and tracked human
                 tracked_center = human_data['center']
-                distance = math.sqrt(
+                
+                # Use predictive matching based on velocity
+                velocity = human_data.get('velocity', [0.0, 0.0])
+                time_since_last = current_time - human_data['last_seen']
+                
+                # Predict where the human should be now based on last known velocity
+                predicted_center = [
+                    tracked_center[0] + velocity[0] * time_since_last,
+                    tracked_center[1] + velocity[1] * time_since_last
+                ]
+                
+                # Calculate distance to both actual last position and predicted position
+                distance_to_last = math.sqrt(
                     (detection_center[0] - tracked_center[0])**2 + 
                     (detection_center[1] - tracked_center[1])**2
                 )
+                distance_to_predicted = math.sqrt(
+                    (detection_center[0] - predicted_center[0])**2 + 
+                    (detection_center[1] - predicted_center[1])**2
+                )
+                
+                # Use the better of the two distances
+                distance = min(distance_to_last, distance_to_predicted)
+                
+                # Also check against recent position history for robustness
+                min_history_distance = distance
+                position_history = human_data.get('position_history', [])
+                for hist_center, hist_time in position_history[-3:]:  # Check last 3 positions
+                    hist_distance = math.sqrt(
+                        (detection_center[0] - hist_center[0])**2 + 
+                        (detection_center[1] - hist_center[1])**2
+                    )
+                    min_history_distance = min(min_history_distance, hist_distance)
+                
+                # Use the best distance from all methods
+                final_distance = min(distance, min_history_distance)
                 
                 # Consider area similarity as well
                 area_ratio = min(detection_area, human_data['area']) / max(detection_area, human_data['area'])
                 
-                # Combined matching score (distance + area similarity)
-                if distance < self.max_tracking_distance and area_ratio > 0.5:
-                    if distance < best_distance:
-                        best_distance = distance
+                # Combined matching score (distance + area similarity) - relaxed for laggy feeds
+                if final_distance < self.max_tracking_distance and area_ratio > 0.3:
+                    if final_distance < best_distance:
+                        best_distance = final_distance
                         best_match_id = human_id
             
             if best_match_id is not None:
                 # Update existing tracked human
                 detection['id'] = best_match_id
+                human_data = self.tracked_humans[best_match_id]
+                
+                # Calculate velocity for prediction
+                old_center = human_data['center']
+                old_time = human_data['last_seen']
+                time_delta = current_time - old_time
+                
+                if time_delta > 0:
+                    velocity = [
+                        (detection_center[0] - old_center[0]) / time_delta,
+                        (detection_center[1] - old_center[1]) / time_delta
+                    ]
+                else:
+                    velocity = human_data.get('velocity', [0.0, 0.0])
+                
+                # Update position history
+                position_history = human_data.get('position_history', [])
+                position_history.append((detection_center, current_time))
+                # Keep only last 5 positions
+                if len(position_history) > 5:
+                    position_history = position_history[-5:]
+                
                 self.tracked_humans[best_match_id].update({
                     'center': detection_center,
                     'area': detection_area,
                     'bbox': detection['bbox'],
                     'confidence': detection['confidence'],
-                    'last_seen': current_time
+                    'last_seen': current_time,
+                    'velocity': velocity,
+                    'position_history': position_history
                 })
             else:
                 # Create new tracked human
@@ -424,7 +480,9 @@ class HumanDetectionNode(Node):
                     'bbox': detection['bbox'],
                     'confidence': detection['confidence'],
                     'last_seen': current_time,
-                    'first_seen': current_time
+                    'first_seen': current_time,
+                    'velocity': [0.0, 0.0],  # [vx, vy] pixels per second
+                    'position_history': [(detection_center, current_time)]  # Last 5 positions
                 }
                 self.next_human_id += 1
             
