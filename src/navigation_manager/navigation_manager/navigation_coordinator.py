@@ -25,7 +25,7 @@ from rclpy.node import Node
 from rclpy.action import ActionClient
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 from std_msgs.msg import String
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, Point
 from nav2_msgs.action import NavigateToPose, BackUp
 from action_msgs.msg import GoalStatus
 import json
@@ -237,7 +237,10 @@ class NavigationCoordinator(Node):
         
         # Create backup goal
         backup_goal = BackUp.Goal()
-        backup_goal.target = self.step_back_distance
+        backup_goal.target = Point()
+        backup_goal.target.x = -self.step_back_distance  # Negative for backing up
+        backup_goal.target.y = 0.0
+        backup_goal.target.z = 0.0
         backup_goal.speed = self.step_back_speed
         
         # Send backup goal
