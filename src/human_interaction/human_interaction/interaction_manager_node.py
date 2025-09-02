@@ -157,7 +157,7 @@ class InteractionManagerNode(Node):
         self.last_command_time = {}  # Dict[command_type, timestamp]
         self.command_rate_limit = 1.0  # seconds between same commands
         self.proximity_command_rate_limit = 5.0  # seconds between proximity commands
-        self.last_proximity_command_per_human = {}  # Dict[human_id, timestamp]
+        self.proximity_warning_given = {}  # Dict[human_id, bool] - track if we already warned this human
         
         # State machine parameters
         self.state_timeout = self.get_parameter('state_timeout').value
@@ -663,15 +663,18 @@ class InteractionManagerNode(Node):
                     closest_human_id = human_id
             
             if closest_human_id and self.current_state == InteractionState.INTERACTION:
-                current_time = time.time()
-                
-                # Safety-first proximity handling with debouncing
+                # Safety-first proximity handling - warn once per human approach
                 if distance < 0.8:  # Too close - safety priority
-                    # Check if we recently sent step_back to this human
-                    last_proximity_time = self.last_proximity_command_per_human.get(closest_human_id, 0)
-                    if current_time - last_proximity_time > self.proximity_command_rate_limit:
+                    # Check if we already warned this human about being too close
+                    if not self.proximity_warning_given.get(closest_human_id, False):
                         self.queue_command(closest_human_id, 'step_back', CommandPriority.SAFETY)
-                        self.last_proximity_command_per_human[closest_human_id] = current_time
+                        self.proximity_warning_given[closest_human_id] = True
+                        self.get_logger().info(f'Proximity warning given to human {closest_human_id} - stepping back once')
+                elif distance > 2.0:  # Human moved to comfortable distance
+                    # Reset proximity warning when human gives appropriate space
+                    if self.proximity_warning_given.get(closest_human_id, False):
+                        self.proximity_warning_given[closest_human_id] = False
+                        self.get_logger().info(f'Human {closest_human_id} moved to comfortable distance - proximity warning reset')
                 elif distance > 4.0 and zone == 'far':  # Too far - approach if was interacting
                     human_state = self.human_states.get(closest_human_id, HumanInteractionState.UNKNOWN)
                     if human_state in [HumanInteractionState.ACTIVE_INTERACTION, HumanInteractionState.IDLE_PRESENCE]:
@@ -860,6 +863,9 @@ class InteractionManagerNode(Node):
                         self.active_interaction_human = None
                     if human_id in self.interaction_queue:
                         self.interaction_queue.remove(human_id)
+                    # Reset proximity warning when human leaves
+                    if human_id in self.proximity_warning_given:
+                        del self.proximity_warning_given[human_id]
             
             # If no humans detected and in interaction state, resume patrol
             if (not self.detected_humans and 
