@@ -6,13 +6,13 @@ This document provides instructions for launching the Go2 robot system with coll
 
 The Go2 robot system consists of two main components:
 1. **Main Robot Stack** - Navigation, SLAM, control, and sensors
-2. **Collision Monitor** - Safety layer for obstacle avoidance
+2. **Collision Monitor** - Safety layer for obstacle avoidance (now integrated)
 
 ## Quick Start
 
-### 1. Launch Main Robot System
+### Launch Complete Robot System with Collision Monitor
 
-In the first terminal, launch the complete robot navigation stack:
+Launch the complete robot navigation stack with integrated collision monitoring:
 
 ```bash
 cd ~/Projects/ROS/go2_ws
@@ -25,15 +25,16 @@ This starts:
 - SLAM toolbox
 - Velocity smoother
 - Scan restamper (converts `/scan` to `/scan_restamped`)
+- **Collision monitor** (safety layer for obstacle avoidance)
 - RViz visualization
 
-### 2. Launch Collision Monitor (Separate Terminal)
+### Optional: Launch Without Collision Monitor
 
-In a second terminal, launch the collision monitor safety layer:
+If you need to run without collision monitoring:
 
 ```bash
 cd ~/Projects/ROS/go2_ws
-ros2 launch nav2_collision_monitor collision_monitor_node.launch.py params_file:=$PWD/src/go2_robot_sdk/config/collision_monitor_params.yaml
+ros2 launch go2_robot_sdk robot.launch.py collision_monitor:=false
 ```
 
 ## System Architecture
@@ -74,7 +75,7 @@ ros2 topic echo /collision_monitor_state
 
 - **`config/nav2_params.yaml`** - Main Nav2 configuration
 - **`config/collision_monitor_params.yaml`** - Collision monitor specific settings
-- **`launch/robot.launch.py`** - Main robot launch file
+- **`launch/robot.launch.py`** - Main robot launch file (now includes collision monitor)
 
 ## Collision Monitor Configuration
 
@@ -104,9 +105,10 @@ export CONN_TYPE="webrtc"
 
 ### Collision Monitor Not Starting
 
-1. **Check parameter file path**:
+1. **Check if collision monitor is enabled**:
    ```bash
-   ls $PWD/src/go2_robot_sdk/config/collision_monitor_params.yaml
+   # Verify collision monitor node is running
+   ros2 node list | grep collision_monitor
    ```
 
 2. **Verify scan_restamper is running**:
