@@ -14,6 +14,7 @@ Parameters:
 - frame_rate: Publishing frame rate (default: 30 Hz)
 - image_width: Image width (default: 640)
 - image_height: Image height (default: 480)
+- flip_horizontal: Flip image horizontally to correct mirror effect (default: True)
 """
 
 import rclpy
@@ -38,6 +39,7 @@ class TestCameraNode(Node):
         self.declare_parameter('image_width', 640)
         self.declare_parameter('image_height', 480)
         self.declare_parameter('enable_preview', True)
+        self.declare_parameter('flip_horizontal', True)
         
         # Get parameters
         self.camera_index = self.get_parameter('camera_index').value
@@ -45,6 +47,7 @@ class TestCameraNode(Node):
         self.image_width = self.get_parameter('image_width').value
         self.image_height = self.get_parameter('image_height').value
         self.enable_preview = self.get_parameter('enable_preview').value
+        self.flip_horizontal = self.get_parameter('flip_horizontal').value
         
         # Initialize camera
         self.camera = None
@@ -84,6 +87,7 @@ class TestCameraNode(Node):
         
         self.get_logger().info(f'Test Camera Node initialized with camera {self.camera_index}')
         self.get_logger().info(f'Publishing at {self.frame_rate} Hz, resolution: {self.image_width}x{self.image_height}')
+        self.get_logger().info(f'Horizontal flip: {"enabled" if self.flip_horizontal else "disabled"}')
     
     def initialize_camera(self):
         """Initialize the camera device"""
@@ -163,6 +167,10 @@ class TestCameraNode(Node):
             # Resize frame if needed
             if frame.shape[1] != self.image_width or frame.shape[0] != self.image_height:
                 frame = cv2.resize(frame, (self.image_width, self.image_height))
+            
+            # Flip frame horizontally to correct mirror effect (common with USB cameras)
+            if self.flip_horizontal:
+                frame = cv2.flip(frame, 1)
             
             # Convert BGR to RGB (OpenCV uses BGR, ROS expects RGB)
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
