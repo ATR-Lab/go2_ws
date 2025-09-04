@@ -193,22 +193,18 @@ class SimpleCameraDisplay(Node):
                 # Create a copy for display
                 display_image = self.current_image.copy()
                 
-                # Draw all overlays on original image (using original coordinate system)
-                # This ensures bounding boxes and overlays align correctly with detected objects
+                # Draw bounding boxes on original image (using original coordinate system)
+                # This ensures bounding boxes align correctly with detected objects
                 self.draw_yolo_detections(display_image)
                 
-                # Draw MediaPipe gestures
-                self.draw_gesture_info(display_image)
-                
-                # Draw interaction state
-                self.draw_state_info(display_image)
-                
-                # Draw performance info
-                self.draw_performance_info(display_image)
-                
-                # Flip horizontally for natural mirror-like display AFTER all drawing is complete
-                # This preserves coordinate system alignment while providing natural user experience
+                # Flip horizontally for natural mirror-like display AFTER bounding boxes
+                # This preserves coordinate system alignment for shapes while allowing normal text
                 display_image = cv2.flip(display_image, 1)
+                
+                # Draw text overlays on flipped image (text appears normal, not mirrored)
+                self.draw_gesture_info(display_image)
+                self.draw_state_info(display_image)
+                self.draw_performance_info(display_image)
             
             # Always display the image (either camera feed or waiting screen)
             cv2.imshow('Robot Dog Petting Zoo - Camera Feed', display_image)
