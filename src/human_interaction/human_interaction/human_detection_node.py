@@ -31,6 +31,7 @@ import json
 import threading
 import time
 import os
+import queue
 from typing import List, Dict, Optional, Tuple
 import math
 from enum import Enum
@@ -44,7 +45,7 @@ class GestureState(Enum):
 
 # MediaPipe setup
 mp_pose = mp.solutions.pose
-mp_hands = mp.solutions.hands
+# mp_hands removed - using only MediaPipe Gesture Recognizer now
 mp_face = mp.solutions.face_detection
 mp_drawing = mp.solutions.drawing_utils
 
@@ -81,7 +82,6 @@ class HumanDetectionNode(Node):
         
         # Initialize state
         self.frame_count = 0
-        self.processing_frame = False
         self.camera_info = None
         self.last_detection_time = time.time()
         
@@ -119,10 +119,26 @@ class HumanDetectionNode(Node):
         self.gesture_start_times = {}  # Dict[human_id, Dict[gesture, timestamp]]
         self.gesture_end_timeout = 1.0  # seconds without gesture = ended
         
-        # Threading for processing
-        self.processing_lock = threading.Lock()
+        # Worker thread architecture for efficient processing
+        # Replace thread-per-frame with single worker thread + queue to:
+        # 1. Eliminate thread creation overhead (1-5ms per frame)
+        # 2. Prevent memory fragmentation from constant thread allocation
+        # 3. Provide natural backpressure when processing can't keep up
+        # 4. Maintain predictable resource usage
+        self.frame_queue = queue.Queue(maxsize=3)  # Small buffer prevents memory buildup
+        self.processing_active = True
+        self.worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
+        self.worker_thread.start()
+        self.get_logger().info('Started single worker thread for frame processing')
         
         self.get_logger().info('Human Detection Node initialized')
+    
+    def __del__(self):
+        """Cleanup worker thread on node destruction"""
+        if hasattr(self, 'processing_active'):
+            self.processing_active = False
+        if hasattr(self, 'worker_thread') and self.worker_thread.is_alive():
+            self.worker_thread.join(timeout=2.0)
     
     def setup_parameters(self):
         """Setup node parameters"""
@@ -282,10 +298,7 @@ class HumanDetectionNode(Node):
         self.get_logger().debug('Received camera info')
     
     def image_callback(self, msg: Image):
-        """Process incoming camera images"""
-        if self.processing_frame:
-            return
-        
+        """Process incoming camera images using worker thread queue"""
         self.frame_count += 1
         current_time = time.time()
         
@@ -300,69 +313,83 @@ class HumanDetectionNode(Node):
             # Convert ROS image to OpenCV format
             cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
             
-            # Process frame in separate thread
-            threading.Thread(
-                target=self.process_frame,
-                args=(cv_image, msg.header.stamp),
-                daemon=True
-            ).start()
+            # Add frame to processing queue (non-blocking)
+            # If queue is full, drop the frame to prevent memory buildup
+            try:
+                self.frame_queue.put_nowait((cv_image, msg.header.stamp))
+            except queue.Full:
+                # Queue full - drop frame to maintain real-time performance
+                # This provides natural backpressure when processing can't keep up
+                pass
             
         except Exception as e:
             self.get_logger().error(f'Error processing image: {e}')
     
+    def _worker_loop(self):
+        """Worker thread loop that processes frames from the queue"""
+        while self.processing_active:
+            try:
+                # Get frame from queue (blocking with timeout)
+                frame_data = self.frame_queue.get(timeout=1.0)
+                if frame_data is None:
+                    continue
+                
+                frame, timestamp = frame_data
+                self.process_frame(frame, timestamp)
+                
+            except queue.Empty:
+                # Timeout - continue loop to check if still active
+                continue
+            except Exception as e:
+                self.get_logger().error(f'Error in worker thread: {e}')
+    
     def process_frame(self, frame: np.ndarray, timestamp):
         """Process frame for human detection and gesture recognition"""
-        with self.processing_lock:
-            self.processing_frame = True
+        try:
+            # Detect humans with YOLO
+            human_detections = self.detect_humans(frame)
             
-            try:
-                # Detect humans with YOLO
-                human_detections = self.detect_humans(frame)
-                
-                # Process each detected human
-                all_gesture_results = []
-                
-                for detection in human_detections:
-                    # Extract human data
-                    bbox = detection['bbox']
-                    confidence = detection['confidence']
-                    human_id = detection['id']
-                    
-                    # Crop human region for detailed analysis
-                    human_region = self.crop_region(frame, bbox)
-                    
-                    # Pose estimation
-                    pose_data = None
-                    if self.enable_pose and human_region is not None:
-                        pose_data = self.estimate_pose(human_region)
-                    
-                    # Gesture recognition (now with human attribution)
-                    gesture_result = None
-                    if self.enable_gestures:
-                        # Use full frame for gesture recognition to capture hands properly
-                        gesture_result = self.recognize_gestures(frame, human_id, bbox)
-                        all_gesture_results.append(gesture_result)
-                    
-                    # Calculate proximity
-                    distance = self.calculate_distance(bbox, confidence)
-                    zone = self.classify_zone(distance)
-                    
-                    # Publish results for this human
-                    self.publish_detection_results(
-                        detection, pose_data, gesture_result, distance, zone, timestamp
-                    )
-                
-                # Publish combined gesture results for interaction manager
-                if all_gesture_results:
-                    self.publish_combined_gestures(all_gesture_results, timestamp)
-                
-                self.last_detection_time = time.time()
-                
-            except Exception as e:
-                self.get_logger().error(f'Error in frame processing: {e}')
+            # Process each detected human
+            all_gesture_results = []
             
-            finally:
-                self.processing_frame = False
+            for detection in human_detections:
+                # Extract human data
+                bbox = detection['bbox']
+                confidence = detection['confidence']
+                human_id = detection['id']
+                
+                # Crop human region for detailed analysis
+                human_region = self.crop_region(frame, bbox)
+                
+                # Pose estimation
+                pose_data = None
+                if self.enable_pose and human_region is not None:
+                    pose_data = self.estimate_pose(human_region)
+                
+                # Gesture recognition (now with human attribution)
+                gesture_result = None
+                if self.enable_gestures:
+                    # Use full frame for gesture recognition to capture hands properly
+                    gesture_result = self.recognize_gestures(frame, human_id, bbox)
+                    all_gesture_results.append(gesture_result)
+                
+                # Calculate proximity
+                distance = self.calculate_distance(bbox, confidence)
+                zone = self.classify_zone(distance)
+                
+                # Publish results for this human
+                self.publish_detection_results(
+                    detection, pose_data, gesture_result, distance, zone, timestamp
+                )
+            
+            # Publish combined gesture results for interaction manager
+            if all_gesture_results:
+                self.publish_combined_gestures(all_gesture_results, timestamp)
+            
+            self.last_detection_time = time.time()
+            
+        except Exception as e:
+            self.get_logger().error(f'Error in frame processing: {e}')
     
     def detect_humans(self, frame: np.ndarray) -> List[Dict]:
         """Detect humans using YOLOv8 with tracking"""
