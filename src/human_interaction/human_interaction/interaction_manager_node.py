@@ -99,10 +99,10 @@ COMMAND_EXECUTION_TIMES = {
 
 # Direct gesture to command mapping (using actual detected gesture names)
 GESTURE_TO_COMMAND_MAP = {
-    "right_fist": "fist_bump",
-    "left_fist": "fist_bump",
-    "right_open_hand": "stretch", 
-    "left_open_hand": "stretch",
+    "right_fist": "stretch",
+    "left_fist": "stretch",
+    "right_open_hand": "hello_gesture", 
+    "left_open_hand": "hello_gesture",
     "hands_visible": "hello_gesture",
     "right_thumbs_up": "peace_response",
     "left_thumbs_up": "peace_response",
@@ -735,9 +735,6 @@ class InteractionManagerNode(Node):
     
     def start_interaction(self):
         """Start human interaction sequence"""
-        # Send greeting behavior
-        self.send_behavior_command('greeting')
-        
         # Send greeting speech
         self.send_speech("Hello! I'm your robot dog friend!")
         
