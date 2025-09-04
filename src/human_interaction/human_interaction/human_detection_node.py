@@ -52,6 +52,8 @@ mp_drawing = mp.solutions.drawing_utils
 try:
     import mediapipe.tasks as mp_tasks
     from mediapipe.tasks.python import vision
+    from mediapipe.tasks.python.vision import GestureRecognizer, GestureRecognizerOptions
+    from mediapipe.tasks.python.components import processors
     GESTURE_RECOGNIZER_AVAILABLE = True
 except ImportError:
     GESTURE_RECOGNIZER_AVAILABLE = False
@@ -100,17 +102,17 @@ class HumanDetectionNode(Node):
         self.tracked_humans = {}  # Dict[track_id, human_metadata]
         self.human_timeout = 3.0  # seconds
         
-        # Gesture state management
+        # Gesture state management - RELAXED FOR BETTER RESPONSIVENESS
         self.gesture_history = []  # List of (timestamp, gestures) tuples
         self.last_gesture_responses = {}  # Dict[human_id, Dict[gesture, timestamp]]
-        self.gesture_debounce_time = 5.0  # seconds - balanced for stability and responsiveness
+        self.gesture_debounce_time = 2.0  # seconds - reduced from 5.0 for faster detection
         self.gesture_rate_limit = 1.0  # max 1 response per gesture per second
         
-        # Gesture stability tracking
+        # Gesture stability tracking - RELAXED REQUIREMENTS
         self.gesture_stability_buffer = {}  # Dict[human_id, Dict[gesture, List[timestamps]]]
-        self.gesture_stability_window = 2.0  # seconds - increased to handle WebRTC timing gaps
-        self.gesture_stability_threshold = 0.3  # 30% of frames must show same gesture (relaxed for persistent IDs)
-        self.min_gesture_confidence_frames = 1  # minimum frames to confirm gesture (reduced for faster detection)
+        self.gesture_stability_window = 1.0  # seconds - reduced from 2.0 for faster response
+        self.gesture_stability_threshold = 0.2  # 20% of frames must show same gesture (reduced from 30%)
+        self.min_gesture_confidence_frames = 1  # minimum frames to confirm gesture
         
         # Gesture state tracking
         self.gesture_states = {}  # Dict[human_id, Dict[gesture, GestureState]]
@@ -167,11 +169,39 @@ class HumanDetectionNode(Node):
                 )
             
             if self.enable_gestures:
-                self.hands = mp_hands.Hands(
-                    min_detection_confidence=0.7,
-                    min_tracking_confidence=0.5,
-                    max_num_hands=2
-                )
+                
+                # Initialize MediaPipe Gesture Recognizer (primary method)
+                self.gesture_recognizer = None
+                if GESTURE_RECOGNIZER_AVAILABLE:
+                    try:
+                        # Try to find MediaPipe gesture recognizer model
+                        mediapipe_model_path = os.path.join(os.getcwd(), 'models', 'mediapipe', 'gesture_recognizer.task')
+                        if not os.path.exists(mediapipe_model_path):
+                            # Fallback to workspace models directory
+                            mediapipe_model_path = os.path.join(os.getcwd(), 'models', 'gesture_recognizer.task')
+                        
+                        if os.path.exists(mediapipe_model_path):
+                            options = GestureRecognizerOptions(
+                                base_options=mp_tasks.BaseOptions(
+                                    model_asset_path=mediapipe_model_path
+                                ),
+                                running_mode=vision.RunningMode.IMAGE,
+                                num_hands=2,
+                                min_hand_detection_confidence=0.7,
+                                min_hand_presence_confidence=0.5,
+                                min_tracking_confidence=0.5
+                            )
+                            self.gesture_recognizer = GestureRecognizer.create_from_options(options)
+                            self.get_logger().info(f'MediaPipe Gesture Recognizer initialized successfully (PRIMARY METHOD) - Model: {mediapipe_model_path}')
+                        else:
+                            self.get_logger().warn(f'MediaPipe gesture recognizer model not found at {mediapipe_model_path}')
+                            self.gesture_recognizer = None
+                    except Exception as e:
+                        self.get_logger().warn(f'Failed to initialize MediaPipe Gesture Recognizer: {e}')
+                        self.gesture_recognizer = None
+                
+                if self.gesture_recognizer is None:
+                    self.get_logger().info('Using custom gesture detection as fallback (FALLBACK METHOD)')
                 
                 # Initialize gesture history for temporal analysis
                 self.gesture_history = []
@@ -507,57 +537,19 @@ class HumanDetectionNode(Node):
             return None
     
     def recognize_gestures(self, frame: np.ndarray, human_id: int, human_bbox: List[int]) -> Dict:
-        """Recognize hand gestures using MediaPipe with human attribution"""
+        """Recognize hand gestures using MediaPipe Gesture Recognizer only"""
         try:
             # Convert BGR to RGB
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            
-            # Process hand detection
-            results = self.hands.process(rgb_frame)
-            
-            gestures = []
             current_time = time.time()
+            gestures = []
+            detection_method = "unavailable"
             
-            if results.multi_hand_landmarks and results.multi_handedness:
-                for hand_landmarks, handedness in zip(results.multi_hand_landmarks, results.multi_handedness):
-                    # Check if hand is within human bounding box
-                    if self.is_hand_in_human_bbox(hand_landmarks, human_bbox, rgb_frame.shape):
-                        # Get hand label (Left/Right)
-                        hand_label = handedness.classification[0].label
-                        
-                        # Analyze hand landmarks for gestures
-                        gesture = self.analyze_hand_gesture(hand_landmarks, hand_label)
-                        if gesture and gesture != "unknown":
-                            full_gesture = f"{hand_label.lower()}_{gesture}"
-                            
-                            # Check if this gesture should be debounced
-                            if self.should_respond_to_gesture(human_id, full_gesture, current_time):
-                                gestures.append(full_gesture)
-            
-            # Update gesture history for temporal analysis
-            if gestures:
-                self.gesture_history.append((current_time, gestures))
-                
-                # Keep only recent history
-                cutoff_time = current_time - 2.0  # Keep 2 seconds of history
-                self.gesture_history = [(t, g) for t, g in self.gesture_history if t > cutoff_time]
-                
-                # Detect gesture sequences
-                sequence_gestures = self.detect_gesture_sequences()
-                gestures.extend(sequence_gestures)
-            
-            # If no gestures detected, check if hands are present (but be more conservative)
-            if not gestures and results.multi_hand_landmarks:
-                # Only add hands_visible if hands are in this human's bbox AND stable
-                hands_detected = False
-                for hand_landmarks in results.multi_hand_landmarks:
-                    if self.is_hand_in_human_bbox(hand_landmarks, human_bbox, rgb_frame.shape):
-                        hands_detected = True
-                        break
-                
-                # Only report hands_visible if we have stable hand detection
-                if hands_detected and self.should_respond_to_gesture(human_id, "hands_visible", current_time):
-                    gestures = ["hands_visible"]
+            # Use only MediaPipe Gesture Recognizer
+            if self.gesture_recognizer is not None:
+                gestures, detection_method = self.recognize_gestures_mediapipe(rgb_frame, human_id, human_bbox, current_time)
+            else:
+                self.get_logger().warn('MediaPipe Gesture Recognizer not available')
             
             # Update gesture states
             gesture_states = self.update_gesture_states(human_id, gestures, current_time)
@@ -566,22 +558,79 @@ class HumanDetectionNode(Node):
                 'human_id': human_id,
                 'gestures': list(set(gestures)),  # Remove duplicates
                 'gesture_states': gesture_states,
-                'timestamp': current_time
+                'timestamp': current_time,
+                'detection_method': detection_method
             }
             
         except Exception as e:
             self.get_logger().error(f'Error in gesture recognition: {e}')
-            return {'human_id': human_id, 'gestures': [], 'timestamp': current_time}
+            return {'human_id': human_id, 'gestures': [], 'timestamp': current_time, 'detection_method': 'error'}
     
-    def is_hand_in_human_bbox(self, hand_landmarks, human_bbox: List[int], frame_shape: Tuple) -> bool:
-        """Check if hand landmarks are within human bounding box"""
+    def recognize_gestures_mediapipe(self, rgb_frame: np.ndarray, human_id: int, human_bbox: List[int], current_time: float) -> Tuple[List[str], str]:
+        """Use MediaPipe Gesture Recognizer for gesture detection"""
+        try:
+            # Create MediaPipe Image
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
+            
+            # Run gesture recognition
+            gesture_recognition_result = self.gesture_recognizer.recognize(mp_image)
+            
+            gestures = []
+            
+            if gesture_recognition_result.gestures:
+                for i, gesture_list in enumerate(gesture_recognition_result.gestures):
+                    if gesture_list and len(gesture_recognition_result.handedness) > i:
+                        # Get the top gesture
+                        top_gesture = gesture_list[0]
+                        handedness = gesture_recognition_result.handedness[i][0]
+                        
+                        # Check if hand is within human bounding box
+                        if (len(gesture_recognition_result.hand_landmarks) > i and 
+                            self.is_hand_in_human_bbox_mp(gesture_recognition_result.hand_landmarks[i], human_bbox, rgb_frame.shape)):
+                            
+                            hand_label = handedness.category_name.lower()  # "left" or "right"
+                            gesture_name = top_gesture.category_name.lower()
+                            confidence = top_gesture.score
+                            
+                            # Only accept gestures with reasonable confidence
+                            if confidence > 0.6:  # Slightly lower threshold for MediaPipe
+                                # Map MediaPipe gesture names to our format
+                                gesture_mapping = {
+                                    'thumb_up': 'thumbs_up',
+                                    'thumb_down': 'thumbs_down', 
+                                    'victory': 'peace_sign',
+                                    'pointing_up': 'pointing',
+                                    'closed_fist': 'fist',
+                                    'open_palm': 'open_hand',
+                                    'iloveyou': 'rock_sign'
+                                }
+                                mapped_gesture = gesture_mapping.get(gesture_name, gesture_name)
+                                full_gesture = f"{hand_label}_{mapped_gesture}"
+                                
+                                self.get_logger().debug(f'MediaPipe detected gesture "{gesture_name}" -> "{mapped_gesture}" (confidence: {confidence:.2f}) for human {human_id}')
+                                
+                                # Check if this gesture should be debounced
+                                if self.should_respond_to_gesture(human_id, full_gesture, current_time):
+                                    gestures.append(full_gesture)
+                                    self.get_logger().info(f'ACCEPTED gesture "{full_gesture}" for human {human_id} [MEDIAPIPE PRIMARY]')
+                                else:
+                                    self.get_logger().debug(f'REJECTED gesture "{full_gesture}" for human {human_id} (debounced) [MEDIAPIPE]')
+            
+            return gestures, "mediapipe_primary"
+            
+        except Exception as e:
+            self.get_logger().error(f'Error in MediaPipe gesture recognition: {e}')
+            return [], "mediapipe_error"
+    
+    def is_hand_in_human_bbox_mp(self, hand_landmarks, human_bbox: List[int], frame_shape: Tuple) -> bool:
+        """Check if MediaPipe hand landmarks are within human bounding box"""
         try:
             height, width = frame_shape[:2]
             x1, y1, x2, y2 = human_bbox
             
-            # Get hand center from landmarks
-            hand_x = sum([lm.x for lm in hand_landmarks.landmark]) / len(hand_landmarks.landmark)
-            hand_y = sum([lm.y for lm in hand_landmarks.landmark]) / len(hand_landmarks.landmark)
+            # Get hand center from landmarks (MediaPipe format)
+            hand_x = sum([lm.x for lm in hand_landmarks]) / len(hand_landmarks)
+            hand_y = sum([lm.y for lm in hand_landmarks]) / len(hand_landmarks)
             
             # Convert normalized coordinates to pixel coordinates
             hand_x_px = int(hand_x * width)
@@ -593,7 +642,7 @@ class HumanDetectionNode(Node):
                     y1 - margin <= hand_y_px <= y2 + margin)
                     
         except Exception as e:
-            self.get_logger().error(f'Error checking hand-human association: {e}')
+            self.get_logger().error(f'Error checking MediaPipe hand-human association: {e}')
             return False
     
     def should_respond_to_gesture(self, human_id: int, gesture: str, current_time: float) -> bool:
@@ -630,12 +679,14 @@ class HumanDetectionNode(Node):
             # Check if we've responded to this gesture recently (enhanced debouncing)
             if gesture in self.last_gesture_responses[human_id]:
                 last_response_time = self.last_gesture_responses[human_id][gesture]
-                if current_time - last_response_time < self.gesture_debounce_time:
+                # Use shorter debounce time for wave gestures (they're dynamic)
+                debounce_time = 1.0 if "wave" in gesture else self.gesture_debounce_time
+                if current_time - last_response_time < debounce_time:
                     return False  # Too soon, debounce this gesture
             
             # Check if we've responded to ANY gesture from this human recently (global cooldown)
             for prev_gesture, prev_time in self.last_gesture_responses[human_id].items():
-                if current_time - prev_time < 2.0:  # 2 second global cooldown per human (reduced)
+                if current_time - prev_time < 0.5:  # 0.5 second global cooldown per human (much reduced)
                     return False
             
             # Record this gesture response
@@ -714,96 +765,6 @@ class HumanDetectionNode(Node):
             self.get_logger().error(f'Error updating gesture states: {e}')
             return {}
     
-    def analyze_hand_gesture(self, landmarks, hand_label: str) -> Optional[str]:
-        """Analyze hand landmarks to determine specific gesture"""
-        try:
-            # Extract key hand landmarks
-            wrist = landmarks.landmark[mp_hands.HandLandmark.WRIST]
-            thumb_tip = landmarks.landmark[mp_hands.HandLandmark.THUMB_TIP]
-            thumb_ip = landmarks.landmark[mp_hands.HandLandmark.THUMB_IP]
-            thumb_mcp = landmarks.landmark[mp_hands.HandLandmark.THUMB_MCP]
-            
-            index_tip = landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP]
-            index_pip = landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_PIP]
-            index_mcp = landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_MCP]
-            
-            middle_tip = landmarks.landmark[mp_hands.HandLandmark.MIDDLE_FINGER_TIP]
-            middle_pip = landmarks.landmark[mp_hands.HandLandmark.MIDDLE_FINGER_PIP]
-            middle_mcp = landmarks.landmark[mp_hands.HandLandmark.MIDDLE_FINGER_MCP]
-            
-            ring_tip = landmarks.landmark[mp_hands.HandLandmark.RING_FINGER_TIP]
-            ring_pip = landmarks.landmark[mp_hands.HandLandmark.RING_FINGER_PIP]
-            ring_mcp = landmarks.landmark[mp_hands.HandLandmark.RING_FINGER_MCP]
-            
-            pinky_tip = landmarks.landmark[mp_hands.HandLandmark.PINKY_TIP]
-            pinky_pip = landmarks.landmark[mp_hands.HandLandmark.PINKY_PIP]
-            pinky_mcp = landmarks.landmark[mp_hands.HandLandmark.PINKY_MCP]
-            
-            # Helper function to check if finger is extended
-            def is_finger_extended(tip, pip, mcp):
-                return tip.y < pip.y < mcp.y
-            
-            def is_thumb_extended(tip, ip, mcp, hand_label):
-                if hand_label == "Right":
-                    return tip.x > ip.x > mcp.x
-                else:  # Left hand
-                    return tip.x < ip.x < mcp.x
-            
-            # Check finger states
-            thumb_up = is_thumb_extended(thumb_tip, thumb_ip, thumb_mcp, hand_label)
-            index_up = is_finger_extended(index_tip, index_pip, index_mcp)
-            middle_up = is_finger_extended(middle_tip, middle_pip, middle_mcp)
-            ring_up = is_finger_extended(ring_tip, ring_pip, ring_mcp)
-            pinky_up = is_finger_extended(pinky_tip, pinky_pip, pinky_mcp)
-            
-            fingers_up = [thumb_up, index_up, middle_up, ring_up, pinky_up]
-            fingers_count = sum(fingers_up)
-            
-            # Gesture recognition logic
-            
-            # Thumbs up: Only thumb extended
-            if thumb_up and not any([index_up, middle_up, ring_up, pinky_up]):
-                return "thumbs_up"
-            
-            # Pointing: Only index finger extended
-            if index_up and not any([thumb_up, middle_up, ring_up, pinky_up]):
-                return "pointing"
-            
-            # Peace sign: Index and middle fingers extended
-            if index_up and middle_up and not any([thumb_up, ring_up, pinky_up]):
-                return "peace_sign"
-            
-            # Rock sign: Index and pinky extended
-            if index_up and pinky_up and not any([thumb_up, middle_up, ring_up]):
-                return "rock_sign"
-            
-            # Open hand: All fingers extended
-            if fingers_count >= 4:
-                return "open_hand"
-            
-            # Fist: No fingers extended
-            if fingers_count == 0:
-                return "fist"
-            
-            # OK sign: Thumb and index forming circle (approximate)
-            thumb_index_distance = math.sqrt(
-                (thumb_tip.x - index_tip.x)**2 + (thumb_tip.y - index_tip.y)**2
-            )
-            if thumb_index_distance < 0.05 and middle_up and ring_up and pinky_up:
-                return "ok_sign"
-            
-            # Wave detection (based on hand position relative to wrist)
-            if index_up and middle_up and ring_up and pinky_up:
-                hand_center_y = (index_tip.y + middle_tip.y + ring_tip.y + pinky_tip.y) / 4
-                if hand_center_y < wrist.y - 0.1:  # Hand raised above wrist
-                    return "wave"
-            
-            # Default: Unknown gesture
-            return "unknown"
-            
-        except Exception as e:
-            self.get_logger().error(f'Error analyzing hand gesture: {e}')
-            return None
     
     def detect_gesture_sequences(self) -> List[str]:
         """Detect gesture sequences from history"""
