@@ -139,6 +139,18 @@ else
 fi
 cd ..
 
+# Download MediaPipe Gesture Recognizer model
+print_status "Downloading MediaPipe Gesture Recognizer model..."
+mkdir -p models/mediapipe
+cd models/mediapipe
+if [ ! -f "gesture_recognizer.task" ]; then
+    wget https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task
+    print_success "Downloaded MediaPipe gesture recognizer model"
+else
+    print_warning "MediaPipe gesture recognizer model already exists"
+fi
+cd ../..
+
 # Create necessary directories
 print_status "Creating project directories..."
 mkdir -p logs
