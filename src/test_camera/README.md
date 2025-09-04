@@ -16,10 +16,10 @@ The `test_camera` package serves as a **development and testing tool** for the r
 ### Nodes
 
 #### 1. `test_camera_node`
-**Purpose**: USB camera capture and ROS2 publishing
+**Purpose**: USB camera capture and ROS2 publishing with optimized coordinate system
 - **Executable**: `ros2 run test_camera test_camera_node`
 - **Publishes**: 
-  - `/camera/image_raw` (sensor_msgs/Image): Camera frames
+  - `/camera/image_raw` (sensor_msgs/Image): Raw camera frames (no flipping for AI processing)
   - `/camera/camera_info` (sensor_msgs/CameraInfo): Camera calibration data
 - **Parameters**:
   - `camera_index` (int, default: 0): USB camera device index
@@ -27,9 +27,10 @@ The `test_camera` package serves as a **development and testing tool** for the r
   - `image_width` (int, default: 640): Frame width (pixels)
   - `image_height` (int, default: 480): Frame height (pixels)
   - `enable_preview` (bool, default: true): Show OpenCV preview window
+- **Coordinate System**: Publishes original camera orientation for accurate AI processing
 
 #### 2. `simple_camera_display`
-**Purpose**: Enhanced multi-human camera display with AI overlays and priority visualization
+**Purpose**: Enhanced multi-human camera display with AI overlays and optimized coordinate system
 - **Executable**: `ros2 run test_camera simple_camera_display`
 - **Subscribes**:
   - `/camera/image_raw`: Camera feed
@@ -40,7 +41,7 @@ The `test_camera` package serves as a **development and testing tool** for the r
   - `/interaction/events`: Interaction events with human IDs
 - **Enhanced Features**:
   - **Multi-Human Support**: Displays multiple humans with unique IDs
-  - **Gesture Attribution**: Shows which human made which gesture
+  - **Gesture Attribution**: Shows which human made which gesture with MediaPipe accuracy
   - **Gesture State Tracking**: Visual indication of NEW/ONGOING/ENDED gestures
   - **Priority Visualization**: Shows gesture priority queue and scores
   - **Interaction Events**: Recent interaction history with human IDs
@@ -48,12 +49,18 @@ The `test_camera` package serves as a **development and testing tool** for the r
   - **Real-time Updates**: Live tracking of human interactions
   - **Performance Metrics**: FPS, detection counts, human tracking
   - **Screenshot Capability**: Save current frame (press 's')
+  - **Optimized Display**: Coordinate-preserving flip for accurate overlays with natural text
 - **Visual Elements**:
-  - **Green Bounding Boxes**: Human detection with ID labels
+  - **Green Bounding Boxes**: Human detection with ID labels (coordinate-aligned)
   - **Color-Coded Gestures**: NEW (Cyan), ONGOING (Orange), ENDED (Gray)
   - **Priority Queue**: Top 5 prioritized gestures with scores
   - **Event History**: Last 3 interaction events
   - **Waiting Screen**: Friendly UI when no camera feed available
+  - **Mirror Display**: Natural mirror-like view for user interaction
+- **Technical Improvements**:
+  - **Coordinate System Preservation**: Bounding boxes drawn before image flip for accuracy
+  - **Text Rendering**: Text overlays drawn after flip for normal appearance
+  - **Performance Optimization**: Efficient single-flip operation for natural display
 - **Controls**:
   - `q`: Quit application
   - `s`: Save screenshot
@@ -140,15 +147,23 @@ ros2 run test_camera simple_camera_display
   - Tracking performance
 
 ### Gesture Recognition
-The system recognizes specific hand gestures:
-- **👍 Thumbs Up**: Only thumb extended
-- **👉 Pointing**: Index finger extended
-- **✌️ Peace Sign**: Index and middle fingers
-- **🤘 Rock Sign**: Index and pinky fingers
-- **✋ Open Hand**: All fingers extended
-- **✊ Fist**: No fingers extended
-- **👌 OK Sign**: Thumb-index circle
-- **👋 Wave**: Hand raised with fingers up
+The system uses **MediaPipe Gesture Recognizer** for accurate hand gesture detection:
+
+**MediaPipe Built-in Gestures**:
+- **👍 Thumbs Up**: Thumb extended upward (MediaPipe: `thumb_up`)
+- **👎 Thumbs Down**: Thumb extended downward (MediaPipe: `thumb_down`)
+- **👉 Pointing**: Index finger pointing (MediaPipe: `pointing_up`)
+- **✌️ Peace Sign**: Victory gesture (MediaPipe: `victory`)
+- **✊ Fist**: Closed fist (MediaPipe: `closed_fist`)
+- **✋ Open Hand**: Open palm (MediaPipe: `open_palm`)
+- **🤘 Rock Sign**: I Love You sign (MediaPipe: `iloveyou`)
+- **👀 Hands Visible**: Hands detected without specific gesture
+
+**Detection Features**:
+- **Automatic Hand Labeling**: Correctly identifies left/right hands
+- **Camera Compatibility**: Works with both mirrored and non-mirrored feeds
+- **Multi-Human Attribution**: Gestures assigned to correct humans
+- **Confidence Filtering**: 0.6 threshold for reliable detection
 
 ## Troubleshooting
 
