@@ -193,6 +193,9 @@ class SimpleCameraDisplay(Node):
                 # Create a copy for display
                 display_image = self.current_image.copy()
                 
+                # Flip horizontally for natural mirror-like display
+                display_image = cv2.flip(display_image, 1)
+                
                 # Draw YOLO detections
                 self.draw_yolo_detections(display_image)
                 
