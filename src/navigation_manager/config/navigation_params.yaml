@@ -1,0 +1,35 @@
+navigation_coordinator:
+  ros__parameters:
+    # ============================================================================
+    # STEP BACK BEHAVIOR PARAMETERS
+    # ============================================================================
+    # Configuration for Nav2 BackUp action when humans get too close
+    
+    # step_back_distance: Distance to step back when human too close (meters)
+    # Expected: 0.3-1.0 (balance safety with space efficiency)
+    # Impact: Larger values = more conservative safety distance
+    # 0.5m provides good safety margin without excessive retreat
+    step_back_distance: 0.5
+    
+    # step_back_speed: Speed for stepping back (m/s)
+    # Expected: 0.1-0.5 (slow and controlled movement)
+    # Impact: Slower = safer but more time to clear area
+    # 0.2m/s provides controlled, non-threatening movement
+    step_back_speed: 0.2
+    
+    # ============================================================================
+    # HUMAN PRESENCE DETECTION PARAMETERS
+    # ============================================================================
+    # Configuration for detecting when humans enter/leave camera view
+    
+    # human_timeout: Time to wait before considering humans "gone" (seconds)
+    # Expected: 3.0-10.0 (balance responsiveness with stability)
+    # Impact: Shorter = more responsive but may flicker on tracking failures
+    # 5.0s provides good balance between responsiveness and stability
+    human_timeout: 5.0
+    
+    # resume_delay: Delay before resuming navigation after humans leave (seconds)
+    # Expected: 1.0-5.0 (ensure humans are truly gone)
+    # Impact: Longer = more conservative, shorter = more responsive
+    # 2.0s provides time for humans to clear the area completely
+    resume_delay: 2.0

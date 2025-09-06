@@ -1,0 +1,39 @@
+# Robot Dog Petting Zoo System - Python Dependencies
+# Core ML/Computer Vision (ROS2 compatible)
+# Note: OpenCV and CV Bridge are installed via ROS2 apt packages
+# cv-bridge>=3.0.0  # Already installed via ros-humble-cv-bridge
+# opencv-python>=4.8.0  # Already installed via ros-humble-vision-opencv
+
+# ML Libraries (not available in ROS2)
+mediapipe>=0.10.0
+ultralytics>=8.0.0  # YOLOv8
+numpy>=1.24.0
+scipy>=1.10.0
+boxmot>=10.0.0  # ByteTrack and other SOTA tracking algorithms
+
+# ROS2 Integration (these are typically installed via apt, but listed for reference)
+# rclpy>=0.10.0
+# sensor_msgs
+# geometry_msgs
+# std_msgs
+# nav_msgs
+# go2_interfaces
+# PyQt5  # Already installed via ros-humble-rqt-* packages
+
+# Audio Processing (existing system integration)
+pyttsx3>=2.90  # TTS fallback
+pydub>=0.25.0  # Audio processing
+
+# Utilities
+PyYAML>=6.0
+Pillow>=9.0.0  # Image processing
+matplotlib>=3.5.0  # Visualization and debugging
+
+# Development and Testing
+pytest>=7.0.0
+black>=22.0.0  # Code formatting
+flake8>=5.0.0  # Linting
+
+# Optional: Performance monitoring
+psutil>=5.9.0  # System monitoring
+memory-profiler>=0.60.0  # Memory profiling

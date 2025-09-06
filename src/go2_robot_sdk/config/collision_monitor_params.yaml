@@ -1,0 +1,239 @@
+collision_monitor:
+  ros__parameters:
+    # ============================================================================
+    # COORDINATE FRAMES
+    # ============================================================================
+    # Frame definitions for collision detection coordinate system
+    
+    # base_frame_id: Robot base frame for collision calculations
+    # Expected: "base_link", "base_footprint" (must match robot URDF)
+    # Impact: Must match other Nav2 components for consistent collision detection
+    # base_footprint standard for ground-based collision detection
+    base_frame_id: "base_footprint"            # Robot base frame for collision detection
+    
+    # odom_frame_id: Odometry frame for velocity prediction
+    # Expected: "odom" (standard ROS convention)
+    # Impact: Used for predicting robot motion in collision detection
+    # Must match robot's odometry frame
+    odom_frame_id: "odom"                      # Odometry frame reference
+    
+    # ============================================================================
+    # VELOCITY COMMAND PIPELINE
+    # ============================================================================
+    # Input/output topics for velocity command monitoring
+    
+    # cmd_vel_in_topic: Input velocity commands (before collision checking)
+    # Expected: Valid ROS topic name from controller server
+    # Impact: Must intercept navigation commands for immediate collision response
+    # "cmd_vel_nav" is the actual output from Nav2 controller server
+    cmd_vel_in_topic: "cmd_vel_nav"            # Input velocity commands from navigation controller
+    
+    # cmd_vel_out_topic: Output velocity commands (after collision checking)
+    # Expected: Valid ROS topic name to robot actuators
+    # Impact: Must send safe commands directly to robot or velocity smoother
+    # "cmd_vel" is the final topic that goes to robot actuators
+    cmd_vel_out_topic: "cmd_vel"               # Output velocity commands to robot
+    
+    # state_topic: Topic for publishing collision monitor status
+    # Expected: Valid ROS topic name for status information
+    # Impact: Provides monitoring state for debugging and system health
+    # Used for diagnostics and system status monitoring
+    state_topic: "collision_monitor_state"     # Monitor state topic
+    
+    # ============================================================================
+    # TIMING AND SYNCHRONIZATION
+    # ============================================================================
+    # Parameters controlling timing behavior and sensor synchronization
+    
+    # transform_tolerance: Transform synchronization tolerance (seconds)
+    # Expected: 0.1-1.0 (should be tight for safety-critical operations)
+    # Impact: Lower values = stricter timing requirements for collision detection
+    # 0.6s accommodates WebRTC latency while maintaining safety
+    transform_tolerance: 0.6                   # Tight transform tolerance for safety
+    
+    # source_timeout: Timeout for sensor data (seconds)
+    # Expected: 0.5-2.0 (balance safety with sensor reliability)
+    # Impact: Lower values = stop robot sooner when sensors fail
+    # 1.0s provides reasonable sensor timeout for safety
+    source_timeout: 1.0                        # Sensor data timeout
+    
+    # base_shift_correction: Correct for base frame coordinate shifts
+    # Expected: true/false
+    # Impact: true = handle dynamic base frame changes, false = assume static
+    # true provides robustness for robots with moving sensor mounts
+    base_shift_correction: True                # Correct for base frame shifts
+    
+    # stop_pub_timeout: Timeout for publishing stop commands (seconds)
+    # Expected: 1.0-5.0 (balance safety with system responsiveness)
+    # Impact: Higher values = longer emergency stop duration
+    # 2.0s ensures robot stays stopped long enough for obstacle clearance
+    stop_pub_timeout: 2.0                      # Timeout for stop commands
+    
+    # ============================================================================
+    # COLLISION DETECTION POLYGONS
+    # ============================================================================
+    # Define geometric areas around robot for collision detection
+    
+    # polygons: List of active collision detection zones
+    # Expected: Array of polygon names (configured below)
+    # Impact: Each polygon provides different collision behaviors
+    # "FootprintStop" for immediate stopping, "FootprintApproach" for early detection
+    polygons: ["FootprintStop", "FootprintApproach"]  # Layered collision detection zones
+    
+    FootprintStop:
+      # type: Collision detection geometry type for immediate stopping
+      # Expected: "polygon", "circle" (geometric shape for detection)
+      # Impact: "polygon" provides accurate robot shape representation
+      # "polygon" uses robot footprint for precise immediate stop zone
+      type: "polygon"                          # Polygon-based immediate stop detection
+      
+      # action_type: Action to take when collision detected in immediate zone
+      # Expected: "stop", "slowdown", "approach", "none"
+      # Impact: "stop" = immediate halt for very close obstacles
+      # "stop" provides instant response to prevent collisions
+      action_type: "stop"                      # Immediate hard stop for very close obstacles
+      
+      # points: Backup polygon points if footprint_topic fails (Go2 dimensions)
+      # Expected: String containing array of [x,y] coordinates in meters, relative to robot center
+      # Impact: Fallback shape when dynamic footprint is unavailable
+      # Go2 dimensions: length ~0.81m, width ~0.40m, with safety margins
+      points: [0.36, 0.20, 0.36, -0.20, -0.45, -0.20, -0.45, 0.20]  # Go2 physical dimensions
+      
+      # footprint_topic: Topic providing robot footprint data
+      # Expected: Valid ROS topic name for footprint information
+      # Impact: Must match costmap footprint publisher for accurate shape
+      # Uses local costmap footprint for precise robot dimensions
+      footprint_topic: "/local_costmap/published_footprint"  # Robot footprint source
+      
+      # time_before_collision: Prediction time horizon for immediate response (seconds)
+      # Expected: 0.1-0.3 (very short for immediate stopping)
+      # Impact: Shorter time = more immediate response to very close obstacles
+      # 0.2s provides instant response for collision prevention
+      time_before_collision: 0.2               # Immediate response time for very close obstacles
+      
+      # simulation_time_step: Time resolution for collision simulation (seconds)
+      # Expected: 0.02-0.1 (high precision for immediate response)
+      # Impact: Smaller steps = more accurate immediate collision prediction
+      # 0.05s provides high precision for immediate stop calculations
+      simulation_time_step: 0.05               # High precision time step for immediate stopping
+      
+      # min_points: Minimum points required for valid polygon
+      # Expected: 3-6 (reasonable polygon detail)
+      # Impact: Higher values = require more detailed polygon definition
+      # 4 points provides sufficient polygon detail for immediate stop zone
+      min_points: 4                            # Minimum points for immediate stop polygon
+      
+      # visualize: Enable immediate stop zone visualization in RViz
+      # Expected: true/false
+      # Impact: true = show immediate stop zone for debugging and monitoring
+      # true essential for visualizing immediate collision response
+      visualize: True                          # Enable immediate stop zone visualization
+      
+      # enabled: Whether this immediate stop polygon is active
+      # Expected: true/false
+      # Impact: true = enables immediate stop collision detection
+      # true provides immediate obstacle response capability
+      enabled: True                            # Enable immediate stop collision detection
+    
+    FootprintApproach:
+      # type: Collision detection geometry type
+      # Expected: "polygon", "circle" (geometric shape for detection)
+      # Impact: "polygon" allows complex shapes, "circle" is simpler
+      # "polygon" provides accurate robot shape representation
+      type: "polygon"                          # Polygon-based collision detection
+      
+      # action_type: Action to take when collision detected
+      # Expected: "stop", "slowdown", "approach", "none"  
+      # Impact: "approach" = gradual slowdown allowing Nav2 to replan, "stop" = immediate halt
+      # "approach" enables smoother stop-replan-continue behavior
+      action_type: "approach"                  # Gradual approach allowing Nav2 replanning
+      
+      # approach_time_allowance: Time allowed for approach behavior before stopping (seconds)
+      # Expected: 0.5-2.0 (balance replanning opportunity with emergency response)
+      # Impact: Longer time = more opportunity for replanning, shorter = faster emergency stop
+      # 0.5s provides fast emergency response while allowing brief replanning window
+      approach_time_allowance: 0.5             # Fast emergency response for sudden obstacles
+      
+      # points: Backup polygon points if footprint_topic fails (Go2 dimensions with approach margin)
+      # Expected: String containing array of [x,y] coordinates in meters, relative to robot center
+      # Impact: Fallback shape when dynamic footprint is unavailable
+      # Go2 dimensions with approach margin: slightly larger than FootprintStop
+      points: [0.40, 0.25, 0.40, -0.25, -0.50, -0.25, -0.50, 0.25]  # Go2 dimensions with approach margin
+      
+      # footprint_topic: Topic providing robot footprint data
+      # Expected: Valid ROS topic name for footprint information
+      # Impact: Must match costmap footprint publisher for accurate shape
+      # Uses local costmap footprint for dynamic robot dimensions
+      footprint_topic: "/local_costmap/published_footprint"  # Robot footprint source
+      
+      # time_before_collision: Prediction time horizon (seconds)
+      # Expected: 0.2-0.5 (balance safety with immediate response)
+      # Impact: Shorter time = more immediate obstacle response
+      # 0.3s provides fast response while accounting for WebRTC latency
+      time_before_collision: 0.3               # Fast response time for immediate obstacle stopping
+      
+      # simulation_time_step: Time resolution for collision simulation (seconds)
+      # Expected: 0.05-0.2 (balance accuracy with computation)
+      # Impact: Smaller steps = more accurate prediction but more computation
+      # 0.1s provides good balance for collision prediction accuracy
+      simulation_time_step: 0.1                # Time step for collision simulation
+      
+      # min_points: Minimum points required for valid polygon
+      # Expected: 3-10 (depends on polygon complexity)
+      # Impact: Higher values = require more detailed polygon definition
+      # 6 points provides reasonable polygon detail for robot footprint
+      min_points: 6                            # Minimum points for polygon validity
+      
+      # visualize: Enable collision zone visualization in RViz
+      # Expected: true/false
+      # Impact: true = helpful for debugging but uses more bandwidth
+      # true recommended for development and tuning
+      visualize: True                          # Enable visualization in RViz
+      
+      # enabled: Whether this collision polygon is active
+      # Expected: true/false
+      # Impact: false = this polygon ignored completely
+      # true enables this collision detection zone
+      enabled: True                            # Enable this collision polygon
+      
+    # ============================================================================
+    # SENSOR SOURCES FOR COLLISION DETECTION
+    # ============================================================================
+    # Configure which sensors provide collision detection data
+    
+    # observation_sources: List of sensor sources for collision detection
+    # Expected: Array of sensor source names (configured below)
+    # Impact: Each source provides different collision detection capabilities
+    # "scan" uses laser scan data for obstacle detection
+    observation_sources: ["scan"]              # Sensor sources for collision detection
+    
+    scan:
+      # type: Sensor type for collision detection
+      # Expected: "scan", "pointcloud", "range"
+      # Impact: Determines how sensor data is processed for collision detection
+      # "scan" for standard 2D laser scan processing
+      type: "scan"                             # Laser scan sensor type
+      
+      # topic: ROS topic for sensor data
+      # Expected: Valid ROS topic name matching sensor publisher
+      # Impact: Must match actual sensor topic for collision detection
+      # "scan_restamped" provides timestamp-corrected laser data
+      topic: "scan_restamped"                  # Restamped laser scan topic
+      
+      # min_height: Minimum height to consider for collision (meters)
+      # Expected: 0.0-0.5 (depends on what robot should avoid)
+      # Impact: Higher values = ignore low obstacles
+      # 0.15m considers obstacles above typical floor irregularities
+      min_height: 0.15                         # Minimum height for collision detection
+      
+      # max_height: Maximum height to consider for collision (meters)
+      # Expected: 1.0-3.0 (depends on robot and environment)
+      # Impact: Higher values = consider taller obstacles
+      # 2.0m handles typical indoor obstacle heights
+      max_height: 2.0                          # Maximum height for collision detection
+      
+      # enabled: Whether this sensor source is active
+      # Expected: true/false
+      # Impact: false = this sensor ignored for collision detection
+      # true enables laser scan collision monitoring
+      enabled: True                            # Enable laser scan collision detection
