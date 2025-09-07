@@ -20,6 +20,11 @@ boxmot>=10.0.0  # ByteTrack and other SOTA tracking algorithms
 # go2_interfaces
 # PyQt5  # Already installed via ros-humble-rqt-* packages
 
+# ROS2 Build Dependencies (needed in virtual environment)
+empy==3.3.4  # Embedded Markup for ROS2 interface generation (ROS2 Humble compatible)
+catkin_pkg  # ROS package parsing for build system
+lark  # Parser for ROS2 interface definition language
+
 # Audio Processing (existing system integration)
 pyttsx3>=2.90  # TTS fallback
 pydub>=0.25.0  # Audio processing
