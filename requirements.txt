@@ -10,6 +10,7 @@ ultralytics>=8.0.0  # YOLOv8
 numpy>=1.24.0
 scipy>=1.10.0
 boxmot>=10.0.0  # ByteTrack and other SOTA tracking algorithms
+pyzbar>=0.1.9  # QR code and barcode detection
 
 # ROS2 Integration (these are typically installed via apt, but listed for reference)
 # rclpy>=0.10.0

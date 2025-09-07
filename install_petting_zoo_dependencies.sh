@@ -63,7 +63,6 @@ fi
 # Install system dependencies
 print_status "Installing system dependencies..."
 sudo apt install -y \
-    python3-opencv \
     python3-pip \
     python3-venv \
     build-essential \
@@ -75,7 +74,9 @@ sudo apt install -y \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
-    libgomp1
+    libgomp1 \
+    libzbar0 \
+    libzbar-dev
 
 # Install ROS2 dependencies (if not already installed)
 print_status "Installing ROS2 dependencies..."
@@ -123,6 +124,12 @@ else
     exit 1
 fi
 
+# Remove PyQt5 from virtual environment to avoid Qt version conflicts
+# PyQt5 gets installed as a dependency of boxmot, but causes conflicts with ROS2's system Qt
+print_status "Removing PyQt5 from virtual environment to prevent Qt conflicts..."
+pip uninstall PyQt5 PyQt5-Qt5 PyQt5-sip -y 2>/dev/null || true
+print_success "PyQt5 removed from virtual environment (ROS2 system Qt will be used)"
+
 # Download YOLOv8 model
 print_status "Downloading YOLOv8 model..."
 mkdir -p models
@@ -155,25 +162,8 @@ mkdir -p data
 mkdir -p maps
 mkdir -p cache
 
-# Set up environment variables
-print_status "Setting up environment variables..."
-if [ ! -f ".env" ]; then
-    cat > .env << EOF
-# Robot Dog Petting Zoo Environment Variables
-export PETTING_ZOO_ROOT=\$(pwd)
-export PYTHONPATH=\$PETTING_ZOO_ROOT/src:\$PYTHONPATH
-export ROS_DOMAIN_ID=42
-export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-
-# Optional: Set robot-specific variables
-# export ROBOT_TOKEN="your_robot_token"
-# export ROBOT_IP="192.168.1.100"
-# export CONN_TYPE="webrtc"
-EOF
-    print_success "Created .env file"
-else
-    print_warning ".env file already exists"
-fi
+# Environment variables are configured dynamically in activate_workspace.sh
+# No persistent .env file needed with the dynamic activation approach
 
 # Prevent colcon from scanning virtual environment
 print_status "Configuring build system..."
@@ -195,42 +185,8 @@ else
     print_warning "pre-commit not installed. Install with: pip install pre-commit"
 fi
 
-# Create a setup script for easy activation
-cat > setup_petting_zoo.sh << 'EOF'
-#!/bin/bash
-# Quick setup script for Robot Dog Petting Zoo development
-
-echo "🤖 Setting up Robot Dog Petting Zoo environment..."
-
-# Source ROS2
-source /opt/ros/humble/setup.bash
-
-# Source workspace
-source install/setup.bash
-
-# Activate virtual environment
-source petting_zoo_venv/bin/activate
-
-# Set environment variables
-if [ -f ".env" ]; then
-    source .env
-fi
-
-echo "✅ Petting Zoo environment ready!"
-echo "📦 Available packages:"
-echo "   - human_interaction"
-echo "   - test_camera" 
-echo "   - go2_robot_sdk"
-echo "   - speech_processor"
-echo "   - navigation_manager"
-echo "   - And more..."
-echo ""
-echo "🚀 To build: colcon build"
-echo "🎯 To run: ros2 launch go2_robot_sdk robot.launch.py"
-EOF
-
-chmod +x setup_petting_zoo.sh
-print_success "Created setup_petting_zoo.sh script"
+# Note: activate_workspace.sh script is now provided as a separate file
+# Users should run: source activate_workspace.sh
 
 # Test installation (run tests inline while venv is active)
 print_status "Testing installation..."
@@ -242,7 +198,11 @@ import cv2
 import mediapipe
 import ultralytics
 import numpy as np
+from pyzbar import pyzbar
+from boxmot import ByteTrack
 print('✅ All Python dependencies imported successfully')
+print('✅ pyzbar available for QR detection')
+print('✅ boxmot available for human tracking')
 " || {
     print_error "Python dependency test failed!"
     exit 1
@@ -305,9 +265,11 @@ print_success "=================================================="
 
 echo ""
 echo "📋 Next steps:"
-echo "1. Source the environment: source setup_petting_zoo.sh"
+echo "1. Source the environment: source activate_workspace.sh"
 echo "2. Start development!"
 echo "3. Launch test camera: ros2 launch test_camera simple_camera_test.launch.py"
+echo "4. Run UI with QR detection: ros2 run go2_robot_ui go2_robot_ui"
+echo "5. Run human detection: ros2 run human_interaction human_detection_node"
 echo ""
 echo "📚 Documentation:"
 echo "- Check the README files in each package"
