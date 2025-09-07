@@ -144,10 +144,33 @@ verify_setup() {
         log_warning "boxmot not available (human tracking will be disabled)"
     fi
     
+    # Check NumPy version compatibility with ROS2 Humble
+    if python -c "import numpy as np; assert np.__version__.startswith('1.'), f'NumPy {np.__version__} incompatible with ROS2 Humble'; print(f'NumPy {np.__version__} compatible')" 2>/dev/null; then
+        log_success "NumPy version is compatible with ROS2 Humble"
+    else
+        log_error "NumPy version incompatible with ROS2 Humble cv_bridge"
+        log_error "Run: ./install_petting_zoo_dependencies.sh --fix-deps"
+        return 1
+    fi
+    
+    # Check OpenCV version compatibility
+    if python -c "import cv2; print(f'OpenCV {cv2.__version__} available')" 2>/dev/null; then
+        local opencv_version=$(python -c "import cv2; print(cv2.__version__)" 2>/dev/null)
+        if [[ $opencv_version == 4.8.* ]]; then
+            log_success "OpenCV version $opencv_version is compatible"
+        else
+            log_warning "OpenCV version $opencv_version may cause compatibility issues"
+            log_warning "Recommended version: 4.8.x. Run --fix-deps to update."
+        fi
+    else
+        log_error "OpenCV not available"
+        return 1
+    fi
+    
     # Verify PyQt5 is NOT in virtual environment (this prevents Qt conflicts)
     if python -c "import PyQt5" 2>/dev/null; then
         log_warning "PyQt5 found in virtual environment - this may cause Qt conflicts"
-        log_warning "Run install script again to remove PyQt5 from venv"
+        log_warning "Run: ./install_petting_zoo_dependencies.sh --fix-deps"
     else
         log_success "PyQt5 correctly absent from venv (prevents Qt conflicts)"
     fi

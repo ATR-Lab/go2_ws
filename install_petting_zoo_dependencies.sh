@@ -32,6 +32,51 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Recovery function for fixing dependency issues on existing installations
+fix_dependencies() {
+    print_status "🔧 Running dependency recovery mode..."
+    
+    # Activate virtual environment if it exists
+    if [ -f "petting_zoo_venv/bin/activate" ]; then
+        source petting_zoo_venv/bin/activate
+        print_success "Virtual environment activated"
+    else
+        print_error "Virtual environment not found. Run full installation first."
+        exit 1
+    fi
+    
+    # Fix NumPy version (force reinstall to ensure compatibility)
+    print_status "Fixing NumPy version for ROS2 Humble compatibility..."
+    pip install "numpy>=1.21.0,<2.0" --force-reinstall
+    
+    # Fix OpenCV version (remove all variants and install compatible version)
+    print_status "Fixing OpenCV version..."
+    pip uninstall opencv-python opencv-contrib-python opencv-python-headless -y 2>/dev/null || true
+    pip install opencv-python-headless==4.8.1.78
+    
+    # Verify the fixes
+    print_status "Verifying dependency fixes..."
+    python -c "
+import numpy as np
+import cv2
+print(f'✅ NumPy version: {np.__version__} (compatible: {np.__version__.startswith(\"1.\")})')
+print(f'✅ OpenCV version: {cv2.__version__} (compatible: {cv2.__version__.startswith(\"4.8\")})')
+print('✅ Dependencies fixed successfully!')
+" || {
+        print_error "Dependency verification failed!"
+        exit 1
+    }
+    
+    print_success "🎉 Dependency recovery completed successfully!"
+    print_success "You can now run: ros2 launch test_camera simple_camera_test.launch.py"
+    exit 0
+}
+
+# Check for recovery mode flag
+if [ "$1" == "--fix-deps" ] || [ "$1" == "--fix-dependencies" ]; then
+    fix_dependencies
+fi
+
 # Check if running as root
 if [[ $EUID -eq 0 ]]; then
    print_error "This script should not be run as root"
@@ -115,6 +160,10 @@ source petting_zoo_venv/bin/activate
 # Upgrade pip
 pip install --upgrade pip
 
+# Pin NumPy to version compatible with ROS2 Humble cv_bridge BEFORE installing other packages
+print_status "Installing NumPy compatible with ROS2 Humble..."
+pip install "numpy>=1.21.0,<2.0"
+
 # Install Python packages from requirements.txt
 if [ -f "requirements.txt" ]; then
     pip install -r requirements.txt
@@ -143,9 +192,9 @@ fi
 print_status "Removing Qt-related packages from virtual environment to prevent Qt conflicts..."
 pip uninstall PyQt5 PyQt5-Qt5 PyQt5-sip -y 2>/dev/null || true
 pip uninstall opencv-contrib-python opencv-python -y 2>/dev/null || true
-print_status "Installing headless OpenCV to replace Qt-enabled versions..."
-pip install opencv-python-headless==4.12.0.88
-print_success "Qt-related packages removed, headless OpenCV installed (ROS2 system Qt will be used)"
+print_status "Installing compatible headless OpenCV to replace Qt-enabled versions..."
+pip install opencv-python-headless==4.8.1.78
+print_success "Qt-related packages removed, compatible OpenCV installed (ROS2 system Qt will be used)"
 
 # Download YOLOv8 model
 print_status "Downloading YOLOv8 model..."
@@ -295,6 +344,7 @@ echo "- Test with your Go2 robot"
 echo ""
 echo "🐛 Troubleshooting:"
 echo "- If you encounter issues, check the logs in the logs/ directory"
+echo "- For NumPy/OpenCV compatibility issues, run: ./install_petting_zoo_dependencies.sh --fix-deps"
 echo "- Ensure your robot is properly configured with go2_robot_sdk"
 echo "- Verify WebRTC connection is working"
 echo ""

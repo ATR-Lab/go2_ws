@@ -7,7 +7,7 @@
 # ML Libraries (not available in ROS2)
 mediapipe>=0.10.0
 ultralytics>=8.0.0  # YOLOv8
-numpy>=1.24.0
+numpy>=1.21.0,<2.0  # ROS2 Humble cv_bridge compatibility
 scipy>=1.10.0
 boxmot>=10.0.0  # ByteTrack and other SOTA tracking algorithms
 pyzbar>=0.1.9  # QR code and barcode detection
