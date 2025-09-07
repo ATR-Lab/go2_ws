@@ -47,9 +47,18 @@ fi
 
 print_status "Starting installation of Robot Dog Petting Zoo dependencies..."
 
-# Update package list
-print_status "Updating package list..."
-sudo apt update
+# Update package list (skip if recent)
+print_status "Checking if package list update is needed..."
+LAST_UPDATE=$(stat -c %Y /var/lib/apt/lists 2>/dev/null || echo 0)
+CURRENT_TIME=$(date +%s)
+TIME_DIFF=$((CURRENT_TIME - LAST_UPDATE))
+
+if [ $TIME_DIFF -gt 86400 ]; then  # 24 hours
+    print_status "Updating package list (last update was more than 24 hours ago)..."
+    sudo apt update
+else
+    print_status "Package list is recent, skipping update..."
+fi
 
 # Install system dependencies
 print_status "Installing system dependencies..."
@@ -87,7 +96,11 @@ sudo apt install -y \
 
 # Create Python virtual environment (optional but recommended)
 print_status "Setting up Python virtual environment..."
-if [ ! -d "petting_zoo_venv" ]; then
+if [ ! -f "petting_zoo_venv/bin/activate" ]; then
+    if [ -d "petting_zoo_venv" ]; then
+        print_warning "Removing incomplete virtual environment directory..."
+        rm -rf petting_zoo_venv
+    fi
     python3 -m venv petting_zoo_venv
     print_success "Created virtual environment: petting_zoo_venv"
 else
