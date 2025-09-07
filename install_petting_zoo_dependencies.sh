@@ -179,37 +179,13 @@ else
     print_warning ".env file already exists"
 fi
 
-# Create ROS2 packages
-print_status "Creating ROS2 packages..."
-
-# Create human_interaction package
-if [ ! -d "src/human_interaction" ]; then
-    cd src
-    ros2 pkg create --build-type ament_python human_interaction --dependencies rclpy sensor_msgs geometry_msgs std_msgs go2_interfaces cv_bridge
-    cd ..
-    print_success "Created human_interaction package"
+# Prevent colcon from scanning virtual environment
+print_status "Configuring build system..."
+if [ ! -f "petting_zoo_venv/COLCON_IGNORE" ]; then
+    touch petting_zoo_venv/COLCON_IGNORE
+    print_success "Added COLCON_IGNORE to virtual environment"
 else
-    print_warning "human_interaction package already exists"
-fi
-
-# Create petting_zoo_behavior package
-if [ ! -d "src/petting_zoo_behavior" ]; then
-    cd src
-    ros2 pkg create --build-type ament_python petting_zoo_behavior --dependencies rclpy go2_interfaces std_msgs geometry_msgs nav_msgs
-    cd ..
-    print_success "Created petting_zoo_behavior package"
-else
-    print_warning "petting_zoo_behavior package already exists"
-fi
-
-# Create enhanced_collision_monitor package
-if [ ! -d "src/enhanced_collision_monitor" ]; then
-    cd src
-    ros2 pkg create --build-type ament_python enhanced_collision_monitor --dependencies rclpy nav2_costmap_2d geometry_msgs sensor_msgs
-    cd ..
-    print_success "Created enhanced_collision_monitor package"
-else
-    print_warning "enhanced_collision_monitor package already exists"
+    print_warning "COLCON_IGNORE already exists in virtual environment"
 fi
 
 # Set up development tools
@@ -247,8 +223,11 @@ fi
 echo "✅ Petting Zoo environment ready!"
 echo "📦 Available packages:"
 echo "   - human_interaction"
-echo "   - petting_zoo_behavior" 
-echo "   - enhanced_collision_monitor"
+echo "   - test_camera" 
+echo "   - go2_robot_sdk"
+echo "   - speech_processor"
+echo "   - navigation_manager"
+echo "   - And more..."
 echo ""
 echo "🚀 To build: colcon build"
 echo "🎯 To run: ros2 launch go2_robot_sdk robot.launch.py"
@@ -277,8 +256,8 @@ print('✅ All Python dependencies imported successfully')
 "
 
 # Test ROS2 packages
-if [ -d "src/human_interaction" ] && [ -d "src/petting_zoo_behavior" ] && [ -d "src/enhanced_collision_monitor" ]; then
-    echo "✅ All ROS2 packages created successfully"
+if [ -d "src/human_interaction" ] && [ -d "src/test_camera" ] && [ -d "src/go2_robot_sdk" ]; then
+    echo "✅ All ROS2 packages found successfully"
 else
     echo "❌ Some ROS2 packages missing"
     exit 1
