@@ -51,9 +51,9 @@ class TestCameraNode(Node):
         self.camera = None
         self.bridge = CvBridge()
         
-        # Setup QoS for camera data - use reliable for compatibility
+        # Setup QoS for camera data - use best effort to match Go2 robot default
         camera_qos = QoSProfile(
-            reliability=QoSReliabilityPolicy.RELIABLE,
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
             history=QoSHistoryPolicy.KEEP_LAST,
             depth=1
         )
