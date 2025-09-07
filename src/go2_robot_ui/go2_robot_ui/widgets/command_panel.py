@@ -60,10 +60,11 @@ class CommandButton(QPushButton):
             "margin: 2px; "
             "} "
             "QPushButton:hover { "
-            "transform: scale(1.05); "
+            "border-width: 3px; "
             "} "
             "QPushButton:pressed { "
-            "transform: scale(0.95); "
+            "padding: 6px; "
+            "border-width: 1px; "
             "}"
         )
         
