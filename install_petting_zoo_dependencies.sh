@@ -124,11 +124,28 @@ else
     exit 1
 fi
 
-# Remove PyQt5 from virtual environment to avoid Qt version conflicts
-# PyQt5 gets installed as a dependency of boxmot, but causes conflicts with ROS2's system Qt
-print_status "Removing PyQt5 from virtual environment to prevent Qt conflicts..."
+# Remove Qt-related packages from virtual environment to avoid Qt version conflicts
+#
+# PROBLEM: The ML dependencies automatically install Qt-enabled packages that conflict with ROS2:
+#   - mediapipe>=0.10.0 → installs opencv-contrib-python (with Qt GUI plugins)
+#   - ultralytics>=8.0.0 → installs opencv-python (with Qt GUI plugins)  
+#   - boxmot>=10.0.0 → installs opencv-python + pyqt5 (with Qt version conflicts)
+#
+# CONFLICT: Virtual environment gets Qt 5.15.14, but ROS2 system uses Qt 5.15.3
+#   This causes "Could not load Qt platform plugin" errors when running ROS2 GUI nodes
+#
+# SOLUTION: Remove Qt-enabled packages and use headless alternatives
+#   - PyQt5/PyQt5-Qt5/PyQt5-sip: Removed (ROS2 system Qt handles GUI)
+#   - opencv-contrib-python/opencv-python: Removed (have Qt plugins)
+#   - opencv-python-headless: Installed (provides CV functionality without Qt)
+#
+# RESULT: ML libraries get OpenCV functionality, ROS2 gets clean Qt environment
+print_status "Removing Qt-related packages from virtual environment to prevent Qt conflicts..."
 pip uninstall PyQt5 PyQt5-Qt5 PyQt5-sip -y 2>/dev/null || true
-print_success "PyQt5 removed from virtual environment (ROS2 system Qt will be used)"
+pip uninstall opencv-contrib-python opencv-python -y 2>/dev/null || true
+print_status "Installing headless OpenCV to replace Qt-enabled versions..."
+pip install opencv-python-headless==4.12.0.88
+print_success "Qt-related packages removed, headless OpenCV installed (ROS2 system Qt will be used)"
 
 # Download YOLOv8 model
 print_status "Downloading YOLOv8 model..."
