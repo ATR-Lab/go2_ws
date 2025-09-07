@@ -236,46 +236,67 @@ EOF
 chmod +x setup_petting_zoo.sh
 print_success "Created setup_petting_zoo.sh script"
 
-# Create a test script
-cat > test_installation.sh << 'EOF'
-#!/bin/bash
-# Test script to verify installation
+# Test installation (run tests inline while venv is active)
+print_status "Testing installation..."
 
-echo "🧪 Testing Robot Dog Petting Zoo installation..."
-
-# Test Python imports
-python3 -c "
+# Test Python imports (in virtual environment)
+print_status "Testing Python dependencies..."
+python -c "
 import cv2
 import mediapipe
 import ultralytics
 import numpy as np
+print('✅ All Python dependencies imported successfully')
+" || {
+    print_error "Python dependency test failed!"
+    exit 1
+}
+
+# Test ROS2 imports (deactivate venv temporarily for ROS2 system packages)
+deactivate
+source /opt/ros/humble/setup.bash
+print_status "Testing ROS2 dependencies..."
+python3 -c "
 import rclpy
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import Pose
-print('✅ All Python dependencies imported successfully')
-"
+print('✅ All ROS2 dependencies imported successfully')
+" || {
+    print_error "ROS2 dependency test failed!"
+    exit 1
+}
 
-# Test ROS2 packages
+# Reactivate virtual environment
+source petting_zoo_venv/bin/activate
+
+# Test ROS2 packages exist
+print_status "Checking ROS2 packages..."
 if [ -d "src/human_interaction" ] && [ -d "src/test_camera" ] && [ -d "src/go2_robot_sdk" ]; then
-    echo "✅ All ROS2 packages found successfully"
+    print_success "All required ROS2 packages found"
 else
-    echo "❌ Some ROS2 packages missing"
+    print_error "Some ROS2 packages missing"
     exit 1
 fi
 
 # Test YOLO model
+print_status "Checking YOLO model..."
 if [ -f "models/yolov8n.pt" ]; then
-    echo "✅ YOLOv8 model downloaded successfully"
+    print_success "YOLOv8 model downloaded successfully"
 else
-    echo "❌ YOLOv8 model missing"
+    print_error "YOLOv8 model missing"
     exit 1
 fi
 
-echo "🎉 Installation test completed successfully!"
-EOF
+# Test MediaPipe model
+print_status "Checking MediaPipe model..."
+if [ -f "models/mediapipe/gesture_recognizer.task" ]; then
+    print_success "MediaPipe gesture recognizer model downloaded successfully"
+else
+    print_error "MediaPipe gesture recognizer model missing"
+    exit 1
+fi
 
-chmod +x test_installation.sh
-print_success "Created test_installation.sh script"
+print_success "🎉 All installation tests passed!"
 
 # Build the workspace
 print_status "Building ROS2 workspace..."
@@ -289,9 +310,8 @@ print_success "=================================================="
 echo ""
 echo "📋 Next steps:"
 echo "1. Source the environment: source setup_petting_zoo.sh"
-echo "2. Test installation: ./test_installation.sh"
-echo "3. Build workspace: colcon build"
-echo "4. Start development!"
+echo "2. Start development!"
+echo "3. Launch test camera: ros2 launch test_camera simple_camera_test.launch.py"
 echo ""
 echo "📚 Documentation:"
 echo "- Check the README files in each package"
