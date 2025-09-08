@@ -10,6 +10,7 @@ from typing import Dict, Optional
 from dataclasses import dataclass
 
 import yaml
+from ament_index_python.packages import get_package_share_directory
 
 
 logger = logging.getLogger(__name__)
@@ -36,10 +37,9 @@ class DanceCommandConfig:
         
         # Default config file location relative to package
         if config_file_path is None:
-            # Get the package directory (go up from this file's location)
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            package_dir = os.path.dirname(os.path.dirname(current_dir))
-            config_file_path = os.path.join(package_dir, "config", "dance_commands.yaml")
+            # Use ROS2 standard method to find package share directory
+            package_share_dir = get_package_share_directory('go2_dance_orchestrator')
+            config_file_path = os.path.join(package_share_dir, "config", "dance_commands.yaml")
         
         self._config_file_path = config_file_path
         self._load_configuration()

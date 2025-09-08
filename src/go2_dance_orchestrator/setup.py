@@ -11,6 +11,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', ['launch/single_command_test.launch.py']),
+        ('share/' + package_name + '/config', ['config/dance_commands.yaml']),
     ],
     install_requires=['setuptools', 'numpy', 'pyyaml'],
     zip_safe=True,
