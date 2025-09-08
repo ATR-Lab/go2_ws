@@ -61,3 +61,4 @@ go2_robot_sdk/.coverage
 go2_robot_sdk/coverage.xml
 
 petting_zoo_venv/
+models/
