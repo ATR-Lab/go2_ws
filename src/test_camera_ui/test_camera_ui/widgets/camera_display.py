@@ -48,6 +48,11 @@ class CameraDisplay(QWidget):
         self.is_connected = False
         self.performance_stats = {}
         
+        # Frame scaling optimization cache
+        self.cached_scale_factor = None
+        self.cached_label_size = (0, 0)
+        self.cached_frame_size = (0, 0)
+        
         self._setup_ui()
         self._setup_styling()
     
@@ -193,6 +198,7 @@ class CameraDisplay(QWidget):
     def _scale_frame_to_fit(self, frame):
         """
         Scale frame to fit within the video label while preserving aspect ratio.
+        Uses caching to avoid unnecessary cv2.resize() operations.
         
         Args:
             frame: OpenCV frame to scale
@@ -207,12 +213,28 @@ class CameraDisplay(QWidget):
             return frame
         
         height, width = frame.shape[:2]
+        current_label_size = (label_width, label_height)
+        current_frame_size = (width, height)
         
-        # Calculate scale factor to fit in label while preserving aspect ratio
-        scale_w = label_width / width
-        scale_h = label_height / height
-        scale = min(scale_w, scale_h, 1.0)  # Don't upscale
+        # Check if we need to recalculate scale factor
+        if (self.cached_scale_factor is None or 
+            current_label_size != self.cached_label_size or 
+            current_frame_size != self.cached_frame_size):
+            
+            # Calculate scale factor to fit in label while preserving aspect ratio
+            scale_w = label_width / width
+            scale_h = label_height / height
+            scale = min(scale_w, scale_h, 1.0)  # Don't upscale
+            
+            # Cache the results
+            self.cached_scale_factor = scale
+            self.cached_label_size = current_label_size
+            self.cached_frame_size = current_frame_size
         
+        # Use cached scale factor
+        scale = self.cached_scale_factor
+        
+        # Only resize if scaling is needed
         if scale < 1.0:
             new_size = (int(width * scale), int(height * scale))
             frame = cv2.resize(frame, new_size, interpolation=cv2.INTER_AREA)
@@ -338,6 +360,13 @@ class CameraDisplay(QWidget):
             }
         """)
         self.info_label.setText(f"Error: {error_message}")
+    
+    def resizeEvent(self, event):
+        """Handle widget resize events to invalidate scaling cache."""
+        super().resizeEvent(event)
+        # Invalidate scaling cache when widget is resized
+        self.cached_scale_factor = None
+        self.cached_label_size = (0, 0)
     
     def get_current_frame_info(self):
         """
