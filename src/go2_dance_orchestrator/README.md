@@ -52,13 +52,13 @@ ros2 launch go2_dance_orchestrator single_command_test.launch.py
 
 ```bash
 # Execute a greeting gesture (completes in ~3 seconds)
-ros2 service call /execute_dance_command go2_interfaces/srv/ExecuteSingleCommand "{command_name: 'Hello'}"
+ros2 service call /execute_dance_command go2_interfaces/srv/ExecuteSingleCommand "command_name: 'Hello'"
 
 # Execute a front flip (completes in ~5 seconds)  
-ros2 service call /execute_dance_command go2_interfaces/srv/ExecuteSingleCommand "{command_name: 'FrontFlip'}"
+ros2 service call /execute_dance_command go2_interfaces/srv/ExecuteSingleCommand "command_name: 'FrontFlip'"
 
 # Execute built-in dance routine (completes in ~20 seconds)
-ros2 service call /execute_dance_command go2_interfaces/srv/ExecuteSingleCommand "{command_name: 'Dance1'}"
+ros2 service call /execute_dance_command go2_interfaces/srv/ExecuteSingleCommand "command_name: 'Dance1'"
 ```
 
 ### Execute Dance Sequences (NEW!)
@@ -66,8 +66,13 @@ ros2 service call /execute_dance_command go2_interfaces/srv/ExecuteSingleCommand
 Execute multiple commands in sequence with automatic timing and transitions:
 
 ```bash
-# Simple greeting sequence
+# Simple greeting sequence (JSON-style)
 ros2 service call /start_dance_routine go2_interfaces/srv/StartDanceRoutine "{command_sequence: ['Hello', 'FingerHeart'], routine_name: 'greeting_routine'}"
+
+# Alternative YAML format (multi-line)
+ros2 service call /start_dance_routine go2_interfaces/srv/StartDanceRoutine "
+command_sequence: ['Hello', 'FingerHeart']
+routine_name: 'greeting_routine'"
 
 # Full performance routine (your requested sequence!)
 ros2 service call /start_dance_routine go2_interfaces/srv/StartDanceRoutine "{command_sequence: ['Hello', 'Dance1', 'FrontFlip'], routine_name: 'performance_routine'}"
