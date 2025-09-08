@@ -60,11 +60,11 @@ class TestCameraThreadedNode(Node):
         self.last_fps_time = time.time()
         self.capture_fps = 0.0
         
-        # Setup QoS for camera data - use best effort to match Go2 robot default
+        # Setup QoS for camera data - use reliable for guaranteed delivery
         camera_qos = QoSProfile(
-            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+            reliability=QoSReliabilityPolicy.RELIABLE,
             history=QoSHistoryPolicy.KEEP_LAST,
-            depth=1
+            depth=10  # Larger buffer for reliable delivery
         )
         
         # Setup publishers
@@ -94,6 +94,19 @@ class TestCameraThreadedNode(Node):
     def initialize_camera(self):
         """Initialize the camera device with optimization"""
         try:
+            # Log available cameras for debugging
+            self.get_logger().info('Scanning for available cameras...')
+            for i in range(8):  # Check first 8 camera indices
+                try:
+                    test_cap = cv2.VideoCapture(i)
+                    if test_cap.isOpened():
+                        self.get_logger().info(f'Found camera at index {i}')
+                        test_cap.release()
+                except:
+                    pass
+            
+            self.get_logger().info(f'Attempting to open camera index {self.camera_index}')
+            
             # Try different backends if the default doesn't work
             backends_to_try = [
                 (cv2.CAP_V4L2, "V4L2"),
