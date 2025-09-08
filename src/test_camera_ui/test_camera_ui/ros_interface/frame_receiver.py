@@ -162,7 +162,8 @@ class FrameReceiver(QObject):
             'max_latency_ms': max_latency * 1000,
             'min_latency_ms': min_latency * 1000,
             'is_connected': self.is_receiving_frames,
-            'elapsed_time': elapsed
+            'elapsed_time': elapsed,
+            'frame_is_rgb': getattr(self, '_last_frame_is_rgb', False)
         }
     
     def _frame_callback(self, msg):
@@ -187,8 +188,14 @@ class FrameReceiver(QObject):
             if len(self.latency_history) > self.max_latency_samples:
                 self.latency_history.pop(0)
             
-            # Convert ROS Image to OpenCV format (BGR for consistency)
-            frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+            # Convert ROS Image to OpenCV format, preserving original encoding
+            if msg.encoding == 'rgb8':
+                frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8')
+                frame_is_rgb = True
+            else:
+                # Default to BGR for backward compatibility
+                frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+                frame_is_rgb = False
             
             # Update connection state
             self.last_frame_received_time = current_time
@@ -200,8 +207,15 @@ class FrameReceiver(QObject):
             # Track frame count
             self.frame_count += 1
             
-            # Emit frame for UI display
+            # Emit frame for UI display with RGB flag
             self.frame_ready.emit(frame, latency)
+            
+            # Store RGB flag for display widget (via performance update)
+            if hasattr(self, '_last_frame_is_rgb'):
+                if self._last_frame_is_rgb != frame_is_rgb:
+                    # Encoding changed, notify display
+                    self.node.get_logger().info(f"Frame encoding changed to: {'RGB' if frame_is_rgb else 'BGR'}")
+            self._last_frame_is_rgb = frame_is_rgb
             
             # Emit performance update periodically
             if self.frame_count % 30 == 0:  # Every 30 frames

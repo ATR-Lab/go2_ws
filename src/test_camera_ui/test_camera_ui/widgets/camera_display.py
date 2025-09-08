@@ -149,8 +149,13 @@ class CameraDisplay(QWidget):
             # Store current frame
             self.current_frame = frame
             
-            # Convert BGR to RGB for Qt display
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            # Check if frame is already RGB (from Go2 SDK) or BGR (from test_camera)
+            # Go2 SDK now publishes RGB, test_camera still publishes BGR
+            if hasattr(self, '_frame_is_rgb') and self._frame_is_rgb:
+                rgb_frame = frame  # Already RGB, no conversion needed
+            else:
+                # Assume BGR from test_camera, convert to RGB
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             
             # Scale frame to fit label while preserving aspect ratio
             scaled_frame = self._scale_frame_to_fit(rgb_frame)
@@ -180,6 +185,8 @@ class CameraDisplay(QWidget):
             stats: Dictionary containing performance metrics
         """
         self.performance_stats = stats
+        # Update RGB flag for color conversion optimization
+        self._frame_is_rgb = stats.get('frame_is_rgb', False)
         self._update_info_display()
     
     @pyqtSlot()
