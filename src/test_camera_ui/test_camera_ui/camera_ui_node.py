@@ -212,10 +212,10 @@ def main(args=None):
             except Exception as e:
                 node.get_logger().error(f"ROS spin error: {e}")
         
-        # Qt timer for ROS message handling
+        # Qt timer for ROS message handling - optimized for video frame rate
         ros_timer = QTimer()
         ros_timer.timeout.connect(spin_ros)
-        ros_timer.start(1)  # 1ms interval for responsive ROS handling
+        ros_timer.start(16)  # 16ms interval (60Hz) - 2x video frame rate for responsive handling
         
         try:
             # Run Qt event loop
