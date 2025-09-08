@@ -49,10 +49,10 @@ fix_dependencies() {
     print_status "Fixing NumPy version for ROS2 Humble compatibility..."
     pip install "numpy>=1.21.0,<2.0" --force-reinstall
     
-    # Fix OpenCV version (remove all variants and install compatible GUI-enabled version)
+    # Fix OpenCV version (remove all variants and install headless version to prevent Qt conflicts)
     print_status "Fixing OpenCV version..."
     pip uninstall opencv-python opencv-contrib-python opencv-python-headless -y 2>/dev/null || true
-    pip install opencv-python==4.8.1.78
+    pip install opencv-python-headless==4.8.1.78
     
     # Verify the fixes
     print_status "Verifying dependency fixes..."
@@ -123,6 +123,7 @@ sudo apt install -y \
     wget \
     curl \
     unzip \
+    ffmpeg \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
@@ -145,7 +146,10 @@ sudo apt install -y \
     ros-humble-vision-opencv \
     ros-humble-rviz2 \
     ros-humble-nav2-* \
-    ros-humble-slam-toolbox
+    ros-humble-slam-toolbox \
+    ros-humble-foxglove-bridge \
+    ros-humble-pointcloud-to-laserscan \
+    ros-humble-twist-mux
 
 # Create Python virtual environment (optional but recommended)
 print_status "Setting up Python virtual environment..."
@@ -180,6 +184,14 @@ else
     exit 1
 fi
 
+# Install Python packages from src/requirements.txt (ROS2 node dependencies)
+if [ -f "src/requirements.txt" ]; then
+    pip install -r src/requirements.txt
+    print_success "Installed ROS2 node dependencies from src/requirements.txt"
+else
+    print_warning "src/requirements.txt not found, skipping ROS2 node dependencies"
+fi
+
 # Remove Qt-related packages from virtual environment to avoid Qt version conflicts
 #
 # PROBLEM: The ML dependencies automatically install Qt-enabled packages that conflict with ROS2:
@@ -190,18 +202,18 @@ fi
 # CONFLICT: Virtual environment gets Qt 5.15.14, but ROS2 system uses Qt 5.15.3
 #   This causes "Could not load Qt platform plugin" errors when running ROS2 GUI nodes
 #
-# SOLUTION: Remove Qt-enabled packages and use compatible GUI-enabled OpenCV
+# SOLUTION: Remove Qt-enabled packages and use headless OpenCV to prevent Qt conflicts
 #   - PyQt5/PyQt5-Qt5/PyQt5-sip: Removed (ROS2 system Qt handles GUI)
 #   - opencv-contrib-python: Removed (has Qt plugins that conflict)
-#   - opencv-python==4.8.1.78: Installed (compatible version with GUI support for testing)
+#   - opencv-python-headless==4.8.1.78: Installed (no Qt plugins, prevents conflicts)
 #
-# RESULT: ML libraries get OpenCV functionality, camera display works for testing
+# RESULT: ML libraries get OpenCV functionality, ROS2 Qt UI works without conflicts
 print_status "Removing Qt-related packages from virtual environment to prevent Qt conflicts..."
 pip uninstall PyQt5 PyQt5-Qt5 PyQt5-sip -y 2>/dev/null || true
-pip uninstall opencv-contrib-python opencv-python -y 2>/dev/null || true
-print_status "Installing compatible GUI-enabled OpenCV for testing and development..."
-pip install opencv-python==4.8.1.78
-print_success "Qt-related packages removed, GUI-enabled OpenCV installed for testing"
+pip uninstall opencv-contrib-python opencv-python opencv-python-headless -y 2>/dev/null || true
+print_status "Installing headless OpenCV to prevent Qt conflicts with ROS2 GUI..."
+pip install opencv-python-headless==4.8.1.78
+print_success "Qt-related packages removed, headless OpenCV installed (prevents Qt conflicts)"
 
 # Download YOLOv8 model
 print_status "Downloading YOLOv8 model..."
