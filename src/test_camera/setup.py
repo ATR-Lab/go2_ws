@@ -24,6 +24,7 @@ setup(
     entry_points={
         'console_scripts': [
             'test_camera_node = test_camera.test_camera_node:main',
+            'test_camera_threaded_node = test_camera.test_camera_threaded_node:main',
             'simple_camera_display = test_camera.simple_camera_display:main',
         ],
     },
