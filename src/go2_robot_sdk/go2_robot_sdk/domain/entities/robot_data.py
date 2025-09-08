@@ -63,7 +63,7 @@ class CameraData:
     image: np.ndarray
     height: int
     width: int
-    encoding: str = "bgr8"
+    encoding: str = "rgb8"
 
 
 @dataclass

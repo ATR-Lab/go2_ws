@@ -126,6 +126,12 @@ class Go2DriverNode(Node):
             history=QoSHistoryPolicy.KEEP_LAST,
             depth=1
         )
+        # Camera QoS optimized for smooth video display
+        camera_qos = QoSProfile(
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=10  # Buffer frames for guaranteed smooth delivery
+        )
 
         publishers = {
             'joint_state': [],
@@ -179,11 +185,11 @@ class Go2DriverNode(Node):
             if self.config.enable_video:
                 publishers['camera'].append(
                     self.create_publisher(
-                        Image, camera_topic, best_effort_qos,
+                        Image, camera_topic, camera_qos,
                         qos_overriding_options=QoSOverridingOptions.with_default_policies()))
                 publishers['camera_info'].append(
                     self.create_publisher(
-                        CameraInfo, camera_info_topic, best_effort_qos,
+                        CameraInfo, camera_info_topic, camera_qos,
                         qos_overriding_options=QoSOverridingOptions.with_default_policies()))
 
             if self.config.publish_raw_voxel:
@@ -290,14 +296,14 @@ class Go2DriverNode(Node):
         while True:
             try:
                 frame = await track.recv()
-                img = frame.to_ndarray(format="bgr24")
+                img = frame.to_ndarray(format="rgb24")
 
                 # Create camera data
                 camera_data = CameraData(
                     image=img,
                     height=img.shape[0],
                     width=img.shape[1],
-                    encoding="bgr8"
+                    encoding="rgb8"
                 )
 
                 robot_data = RobotData(
