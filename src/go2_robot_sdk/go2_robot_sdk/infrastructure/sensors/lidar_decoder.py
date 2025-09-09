@@ -118,6 +118,21 @@ class LidarDecoder:
         self.pointCount = self.malloc(self.store, 4)
         self.decompressBufferSize = 80000
 
+        # Pre-allocate reusable buffers to eliminate per-message allocations
+        self._positions_buffer = bytearray(2880000)  # Max positions buffer
+        self._uvs_buffer = bytearray(1920000)        # Max UVs buffer  
+        self._indices_buffer = bytearray(5760000)    # Max indices buffer
+        self._positions_array = np.zeros(2880000, dtype=np.uint8)  # Pre-allocated NumPy array
+        self._uvs_array = np.zeros(1920000, dtype=np.uint8)        # Pre-allocated NumPy array
+        self._indices_array = np.zeros(5760000 // 4, dtype=np.uint32)  # Pre-allocated NumPy array
+
+        # Pre-allocate point cloud processing buffers
+        self._max_points = 100000  # Reasonable maximum points
+        self._position_processing_buffer = np.zeros((self._max_points, 3), dtype=np.float32)
+        self._uv_processing_buffer = np.zeros((self._max_points, 2), dtype=np.float32)
+        self._intensity_buffer = np.zeros((self._max_points, 1), dtype=np.float32)
+        self._combined_buffer = np.zeros((self._max_points, 4), dtype=np.float32)
+
     def adjust_memory_size(self, t):
         return len(self.HEAPU8)
 
@@ -180,17 +195,24 @@ class LidarDecoder:
         c = self.get_value(self.pointCount, "i32")
         u = self.get_value(self.faceCount, "i32")
 
-        positions_slice = self.HEAPU8[self.positions:self.positions + u * 12]
-        positions_copy = bytearray(positions_slice)
-        p = np.frombuffer(positions_copy, dtype=np.uint8)
+        # Reuse pre-allocated buffers instead of creating new ones
+        positions_size = u * 12
+        self._positions_buffer[:positions_size] = self.HEAPU8[self.positions:self.positions + positions_size]
+        self._positions_array[:positions_size] = self._positions_buffer[:positions_size]
+        p = self._positions_array[:positions_size]
 
-        uvs_slice = self.HEAPU8[self.uvs:self.uvs + u * 8]
-        uvs_copy = bytearray(uvs_slice)
-        r = np.frombuffer(uvs_copy, dtype=np.uint8)
+        uvs_size = u * 8
+        self._uvs_buffer[:uvs_size] = self.HEAPU8[self.uvs:self.uvs + uvs_size]
+        self._uvs_array[:uvs_size] = self._uvs_buffer[:uvs_size]
+        r = self._uvs_array[:uvs_size]
 
-        indices_slice = self.HEAPU8[self.indices:self.indices + u * 24]
-        indices_copy = bytearray(indices_slice)
-        o = np.frombuffer(indices_copy, dtype=np.uint32)
+        indices_size = u * 24
+        self._indices_buffer[:indices_size] = self.HEAPU8[self.indices:self.indices + indices_size]
+        # For indices, we need to reinterpret bytes as uint32
+        indices_uint32_size = indices_size // 4
+        indices_view = np.frombuffer(self._indices_buffer[:indices_size], dtype=np.uint32)
+        self._indices_array[:indices_uint32_size] = indices_view
+        o = self._indices_array[:indices_uint32_size]
 
         return {
             "point_count": c,
@@ -199,6 +221,62 @@ class LidarDecoder:
             "uvs": r,
             "indices": o
         }
+
+    def update_meshes_for_cloud2(
+        self, 
+        positions: list, 
+        uvs: list, 
+        res: float, 
+        origin: list, 
+        intense_limiter: float
+    ) -> np.ndarray:
+        """
+        Optimized point cloud processing using pre-allocated buffers.
+        
+        Args:
+            positions: Raw position data from LiDAR
+            uvs: UV coordinate data
+            res: Resolution factor
+            origin: Origin offset coordinates
+            intense_limiter: Intensity threshold filter
+            
+        Returns:
+            Processed point cloud array with x,y,z,intensity
+        """
+        num_points = len(positions) // 3
+        if num_points > self._max_points:
+            # Fallback to original method for oversized data
+            return update_meshes_for_cloud2(positions, uvs, res, origin, intense_limiter)
+        
+        # Use pre-allocated buffers - zero allocations
+        pos_view = self._position_processing_buffer[:num_points]
+        uv_view = self._uv_processing_buffer[:num_points]
+        intensity_view = self._intensity_buffer[:num_points]
+        combined_view = self._combined_buffer[:num_points]
+        
+        # Direct assignment to pre-allocated memory
+        pos_view.flat[:] = positions
+        uv_view.flat[:] = uvs
+        
+        # In-place operations to avoid allocations
+        pos_view *= res
+        pos_view += origin
+        
+        # Calculate intensities in-place
+        np.minimum(uv_view[:, 0], uv_view[:, 1], out=intensity_view[:, 0])
+        
+        # Combine positions with intensities in pre-allocated buffer
+        combined_view[:, :3] = pos_view
+        combined_view[:, 3:4] = intensity_view
+        
+        # Filter out points below intensity threshold
+        mask = combined_view[:, 3] > intense_limiter
+        filtered_points = combined_view[mask]
+        
+        # Remove duplicate points
+        unique_points = np.unique(filtered_points, axis=0)
+        
+        return unique_points
 
 
 def get_voxel_decoder() -> LidarDecoder:
@@ -241,6 +319,7 @@ def decode_lidar_data(
     positions = result["positions"]
     uvs = result["uvs"]
     
-    return update_meshes_for_cloud2(
+    # Use the optimized method from the decoder instance
+    return decoder.update_meshes_for_cloud2(
         positions, uvs, resolution, origin, intensity_threshold
     ) 
