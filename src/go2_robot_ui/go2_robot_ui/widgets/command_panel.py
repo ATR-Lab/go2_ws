@@ -196,6 +196,7 @@ class CommandPanel(QWidget):
             ("MoonWalk", "Moon walk movement"),
             ("Bound", "Bounding movement"),
             ("CrossWalk", "Cross walking gait"),
+            ("CrossStep", "Cross stepping movement"),
         ],
         
         # Emergency Actions
