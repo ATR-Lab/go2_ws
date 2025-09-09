@@ -68,9 +68,9 @@ class HttpClient:
             if headers:
                 request_headers.update(headers)
             
-            logger.debug(f"Making {method} request to {url}")
-            logger.debug(f"Headers: {request_headers}")
-            logger.debug(f"Body: {body}")
+            # logger.debug(f"Making {method} request to {url}")
+            # logger.debug(f"Headers: {request_headers}")
+            # logger.debug(f"Body: {body}")
             
             # Make the request
             response = self.session.request(
@@ -84,8 +84,8 @@ class HttpClient:
             # Check if the request was successful
             response.raise_for_status()
             
-            logger.debug(f"Response status: {response.status_code}")
-            logger.debug(f"Response body: {response.text}")
+            # logger.debug(f"Response status: {response.status_code}")
+            # logger.debug(f"Response body: {response.text}")
             
             return response
             

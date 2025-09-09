@@ -291,7 +291,7 @@ class Go2DriverNode(Node):
 
     async def _on_video_frame(self, track: MediaStreamTrack, robot_id: str) -> None:
         """Callback for processing video frames"""
-        logger.info(f"Video frame received for robot {robot_id}")
+        # logger.info(f"Video frame received for robot {robot_id}")
 
         while True:
             try:

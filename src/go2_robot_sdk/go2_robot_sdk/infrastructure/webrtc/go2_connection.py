@@ -94,7 +94,7 @@ class Go2Connection:
     def on_data_channel_message(self, message: Union[str, bytes]) -> None:
         """Handle incoming data channel messages"""
         try:
-            logger.debug(f"Received message: {message}")
+            # logger.debug(f"Received message: {message}")
             
             # Ensure data channel is marked as open
             if self.data_channel.readyState != "open":
@@ -128,9 +128,14 @@ class Go2Connection:
         
         if track.kind == "video" and self.on_video_frame:
             try:
-                await self.on_video_frame(track, self.robot_num)
+                # await self.on_video_frame(track, self.robot_num)
+                # Create ONLY ONE task per track, not per frame
+                if not hasattr(self, '_video_task') or self._video_task.done():
+                    self._video_task = asyncio.create_task(
+                        self.on_video_frame(track, self.robot_num)
+                    )
             except Exception as e:
-                logger.error(f"Error in video frame callback: {e}")
+                logger.error(f"Error creating video frame task: {e}")
     
     def validate_robot_conn(self, message: Dict[str, Any]) -> None:
         """Handle robot validation response"""
@@ -176,7 +181,7 @@ class Go2Connection:
             }
             
             payload_str = json.dumps(payload)
-            logger.info(f"-> Sending message {payload_str}")
+            # logger.info(f"-> Sending message {payload_str}")
             self.data_channel.send(payload_str)
             
         except Exception as e:
