@@ -187,6 +187,56 @@ class Go2Connection:
         except Exception as e:
             logger.error(f"Failed to publish message: {e}")
     
+    def _optimize_sdp_for_h264(self, sdp: str) -> str:
+        """
+        Modify SDP to request H.264 Baseline profile for better compatibility.
+        This asks the robot to use simpler H.264 encoding that's less error-prone.
+        """
+        print("🔍 === ORIGINAL SDP ===", flush=True)
+        print(sdp, flush=True)
+        logger.info("=== ORIGINAL SDP ===")
+        logger.info(sdp)
+        
+        lines = sdp.split('\n')
+        modified_lines = []
+        modifications_made = 0
+        
+        for line in lines:
+            if line.startswith('a=fmtp:') and ('H264' in line or 'h264' in line):
+                original_line = line
+                # Force H.264 Baseline profile for better compatibility
+                if 'profile-level-id' not in line:
+                    line += ';profile-level-id=42e01e'  # Baseline Profile, Level 3.0
+                    modifications_made += 1
+                else:
+                    # Replace existing profile with Baseline
+                    import re
+                    line = re.sub(r'profile-level-id=[0-9a-fA-F]+', 'profile-level-id=42e01e', line)
+                    if line != original_line:
+                        modifications_made += 1
+                
+                # Ensure packetization mode 1 for compatibility
+                if 'packetization-mode' not in line:
+                    line += ';packetization-mode=1'
+                    modifications_made += 1
+                    
+                if line != original_line:
+                    print(f"🔧 Modified H.264 line: {original_line} -> {line}", flush=True)
+                    logger.info(f"Modified H.264 line: {original_line} -> {line}")
+                    
+            modified_lines.append(line)
+        
+        modified_sdp = '\n'.join(modified_lines)
+        
+        print("🔍 === MODIFIED SDP ===", flush=True)
+        print(modified_sdp, flush=True)
+        print(f"🎯 === MODIFICATIONS MADE: {modifications_made} ===", flush=True)
+        logger.info("=== MODIFIED SDP ===")
+        logger.info(modified_sdp)
+        logger.info(f"SDP modifications made: {modifications_made}")
+        
+        return modified_sdp
+    
     async def disableTrafficSaving(self, switch: bool) -> bool:
         """
         Disable traffic saving mode for better data transmission.
@@ -219,6 +269,11 @@ class Go2Connection:
             
             # Step 1: Create WebRTC offer
             offer = await self.pc.createOffer()
+            
+            # Modify SDP to request H.264 Baseline profile for better compatibility
+            modified_sdp = self._optimize_sdp_for_h264(offer.sdp)
+            offer = RTCSessionDescription(sdp=modified_sdp, type=offer.type)
+            
             await self.pc.setLocalDescription(offer)
             
             sdp_offer = self.pc.localDescription
@@ -280,6 +335,30 @@ class Go2Connection:
                 # Decrypt the response
                 decrypted_response = CryptoUtils.aes_decrypt(response.text, aes_key)
                 peer_answer = json.loads(decrypted_response)
+                
+                # Log robot's SDP response
+                print("🤖 === ROBOT'S SDP ANSWER ===", flush=True)
+                robot_sdp = peer_answer.get('sdp', 'No SDP in response')
+                print(robot_sdp, flush=True)
+                logger.info("=== ROBOT'S SDP ANSWER ===")
+                logger.info(robot_sdp)
+                
+                # Analyze robot's codec choice
+                if 'H264' in robot_sdp or 'h264' in robot_sdp:
+                    logger.info("Robot accepted H.264 codec")
+                    # Look for profile-level-id in robot's response
+                    import re
+                    profile_matches = re.findall(r'profile-level-id=([0-9a-fA-F]+)', robot_sdp)
+                    if profile_matches:
+                        for profile in profile_matches:
+                            if profile == '42e01e':
+                                logger.info("✅ Robot confirmed H.264 Baseline profile")
+                            else:
+                                logger.info(f"❌ Robot using different H.264 profile: {profile}")
+                    else:
+                        logger.info("⚠️ No profile-level-id found in robot's H.264 response")
+                else:
+                    logger.info("⚠️ Robot did not accept H.264 codec")
                 
                 # Set remote description
                 answer = RTCSessionDescription(
