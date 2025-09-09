@@ -15,6 +15,7 @@ import logging
 import base64
 from typing import Callable, Optional, Any, Dict, Union
 from aiortc import RTCPeerConnection, RTCSessionDescription, MediaStreamTrack
+import time
 
 from .crypto.encryption import CryptoUtils, ValidationCrypto, PathCalculator, EncryptionError
 from .http_client import HttpClient, WebRTCHttpError
@@ -206,12 +207,12 @@ class Go2Connection:
                 original_line = line
                 # Force H.264 Baseline profile for better compatibility
                 if 'profile-level-id' not in line:
-                    line += ';profile-level-id=42e01e'  # Baseline Profile, Level 3.0
+                    line += ';profile-level-id=42e01f'  # Baseline Profile, Level 3.0
                     modifications_made += 1
                 else:
                     # Replace existing profile with Baseline
                     import re
-                    line = re.sub(r'profile-level-id=[0-9a-fA-F]+', 'profile-level-id=42e01e', line)
+                    line = re.sub(r'profile-level-id=[0-9a-fA-F]+', 'profile-level-id=42e01f', line)
                     if line != original_line:
                         modifications_made += 1
                 
@@ -366,6 +367,16 @@ class Go2Connection:
                     type=peer_answer['type']
                 )
                 await self.pc.setRemoteDescription(answer)
+                # Smart PLI: burst + short keepalive to force a clean IDR and recover from early loss
+                try:
+                    self._pli_tasks.append(asyncio.create_task(self._burst_pli(repeats=5, interval=0.5)))
+                except Exception as e:
+                    logger.debug(f"Failed to start PLI burst: {e}")
+                try:
+                    self._pli_tasks.append(asyncio.create_task(self._startup_pli_keepalive(interval=2.0, duration=self._pli_keepalive_secs_default)))
+                except Exception as e:
+                    logger.debug(f"Failed to start PLI keepalive: {e}")
+
                 
                 logger.info(f"Successfully established WebRTC connection to robot {self.robot_num}")
                 
@@ -391,13 +402,53 @@ class Go2Connection:
         except Exception as e:
             logger.error(f"Error disconnecting: {e}")
     
-    def __del__(self):
+    
+    # ---------------------- PLI helpers ----------------------
+    async def _send_pli_all(self) -> None:
+        """Send RTCP PLI (Picture Loss Indication) on all available RTP senders."""
+        try:
+            for trans in self.pc.getTransceivers():
+                sender = getattr(trans, "sender", None)
+                if sender is not None and hasattr(sender, "send_rtcp_pli"):
+                    try:
+                        await sender.send_rtcp_pli()
+                    except Exception as e:
+                        logger.debug(f"send_rtcp_pli failed on {trans}: {e}")
+        except Exception as e:
+            logger.debug(f"_send_pli_all error: {e}")
+
+    async def _burst_pli(self, repeats: int = 5, interval: float = 0.5) -> None:
+        """Issue a short burst of PLIs after remote description is set."""
+        repeats = max(1, int(repeats))
+        interval = max(0.05, float(interval))
+        for _ in range(repeats):
+            await self._send_pli_all()
+            await asyncio.sleep(interval)
+
+    async def _startup_pli_keepalive(self, interval: float = 2.0, duration: float = 8.0) -> None:
+        """For the first few seconds after connection, periodically request keyframes."""
+        if duration <= 0:
+            return
+        end = time.time() + float(duration)
+        interval = max(0.2, float(interval))
+        while time.time() < end:
+            try:
+                await self._send_pli_all()
+            except Exception:
+                pass
+            await asyncio.sleep(interval)
+    # --------------------------------------------------------
+def __del__(self):
         """Cleanup on object destruction"""
         try:
             if hasattr(self, 'http_client'):
                 self.http_client.close()
         except:
             pass
+        # PLI control
+        self._pli_tasks = []
+        self._pli_keepalive_secs_default = 8.0
+
 
 
 # Static methods for backward compatibility
