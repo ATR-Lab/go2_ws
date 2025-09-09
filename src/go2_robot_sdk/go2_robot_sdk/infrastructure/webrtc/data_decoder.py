@@ -77,7 +77,7 @@ class WebRTCDataDecoder:
             # Extract length of JSON segment (first 2 bytes, little-endian)
             json_length = struct.unpack("<H", buffer[:2])[0]
             
-            logger.debug(f"JSON segment length: {json_length}")
+            # logger.debug(f"JSON segment length: {json_length}")
             
             # Validate buffer length
             if len(buffer) < 4 + json_length:
@@ -98,7 +98,7 @@ class WebRTCDataDecoder:
                 logger.error(f"Failed to decode JSON segment: {e}")
                 return None
             
-            logger.debug(f"Decoded metadata: {metadata}")
+            # logger.debug(f"Decoded metadata: {metadata}")
             
             # Add compressed data to result
             result = metadata.copy()
@@ -108,7 +108,7 @@ class WebRTCDataDecoder:
                 try:
                     decoded_data = self._decode_lidar_data(compressed_data, metadata)
                     result["decoded_data"] = decoded_data
-                    logger.debug("Successfully decoded LiDAR data")
+                    # logger.debug("Successfully decoded LiDAR data")
                 except Exception as e:
                     logger.warning(f"Failed to decode LiDAR data: {e}")
                     result["compressed_data"] = compressed_data
