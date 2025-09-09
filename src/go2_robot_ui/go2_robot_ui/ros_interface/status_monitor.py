@@ -177,25 +177,30 @@ class StatusMonitor(QObject):
             current_time = time.time()
             self.last_imu_time = current_time
             
-            # Convert IMU data to dictionary
+            # Convert IMU data to dictionary using go2_interfaces/IMU structure
             imu_data = {
-                'orientation': {
-                    'x': msg.orientation.x,
-                    'y': msg.orientation.y,
-                    'z': msg.orientation.z,
-                    'w': msg.orientation.w
+                'quaternion': {
+                    'x': msg.quaternion[0],
+                    'y': msg.quaternion[1],
+                    'z': msg.quaternion[2],
+                    'w': msg.quaternion[3]
                 },
-                'angular_velocity': {
-                    'x': msg.angular_velocity.x,
-                    'y': msg.angular_velocity.y,
-                    'z': msg.angular_velocity.z
+                'gyroscope': {
+                    'x': msg.gyroscope[0],
+                    'y': msg.gyroscope[1],
+                    'z': msg.gyroscope[2]
                 },
-                'linear_acceleration': {
-                    'x': msg.linear_acceleration.x,
-                    'y': msg.linear_acceleration.y,
-                    'z': msg.linear_acceleration.z
+                'accelerometer': {
+                    'x': msg.accelerometer[0],
+                    'y': msg.accelerometer[1],
+                    'z': msg.accelerometer[2]
                 },
-                'temperature': getattr(msg, 'temperature', 0.0),
+                'rpy': {
+                    'roll': msg.rpy[0],
+                    'pitch': msg.rpy[1],
+                    'yaw': msg.rpy[2]
+                },
+                'temperature': msg.temperature,
                 'timestamp': current_time
             }
             

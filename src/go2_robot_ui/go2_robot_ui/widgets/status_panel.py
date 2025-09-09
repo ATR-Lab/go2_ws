@@ -169,13 +169,13 @@ class StatusPanel(QWidget):
         # Position
         layout.addWidget(QLabel("Position (m):"), 2, 0, 1, 2)
         self.status_labels['position'] = QLabel("X: -- Y: -- Z: --")
-        self.status_labels['position'].setStyleSheet(self._get_info_label_style())
+        self.status_labels['position'].setStyleSheet(self._get_value_label_style())
         layout.addWidget(self.status_labels['position'], 3, 0, 1, 2)
         
         # Velocity
         layout.addWidget(QLabel("Velocity (m/s):"), 4, 0, 1, 2)
         self.status_labels['velocity'] = QLabel("X: -- Y: -- Z: --")
-        self.status_labels['velocity'].setStyleSheet(self._get_info_label_style())
+        self.status_labels['velocity'].setStyleSheet(self._get_value_label_style())
         layout.addWidget(self.status_labels['velocity'], 5, 0, 1, 2)
         
         # Body height
@@ -193,23 +193,35 @@ class StatusPanel(QWidget):
         
         layout = QGridLayout(group)
         
-        # Orientation (roll, pitch, yaw)
+        # Orientation (roll, pitch, yaw) - using direct RPY values
         layout.addWidget(QLabel("Orientation (°):"), 0, 0, 1, 2)
         self.status_labels['orientation'] = QLabel("R: -- P: -- Y: --")
-        self.status_labels['orientation'].setStyleSheet(self._get_info_label_style())
+        self.status_labels['orientation'].setStyleSheet(self._get_value_label_style())
         layout.addWidget(self.status_labels['orientation'], 1, 0, 1, 2)
         
-        # Angular velocity
-        layout.addWidget(QLabel("Angular Vel (°/s):"), 2, 0, 1, 2)
-        self.status_labels['angular_vel'] = QLabel("X: -- Y: -- Z: --")
-        self.status_labels['angular_vel'].setStyleSheet(self._get_info_label_style())
-        layout.addWidget(self.status_labels['angular_vel'], 3, 0, 1, 2)
+        # Quaternion
+        layout.addWidget(QLabel("Quaternion:"), 2, 0, 1, 2)
+        self.status_labels['quaternion'] = QLabel("X: -- Y: -- Z: -- W: --")
+        self.status_labels['quaternion'].setStyleSheet(self._get_value_label_style())
+        layout.addWidget(self.status_labels['quaternion'], 3, 0, 1, 2)
         
-        # Linear acceleration
-        layout.addWidget(QLabel("Acceleration (m/s²):"), 4, 0, 1, 2)
-        self.status_labels['linear_accel'] = QLabel("X: -- Y: -- Z: --")
-        self.status_labels['linear_accel'].setStyleSheet(self._get_info_label_style())
-        layout.addWidget(self.status_labels['linear_accel'], 5, 0, 1, 2)
+        # Gyroscope (angular velocity)
+        layout.addWidget(QLabel("Gyroscope (°/s):"), 4, 0, 1, 2)
+        self.status_labels['gyroscope'] = QLabel("X: -- Y: -- Z: --")
+        self.status_labels['gyroscope'].setStyleSheet(self._get_value_label_style())
+        layout.addWidget(self.status_labels['gyroscope'], 5, 0, 1, 2)
+        
+        # Accelerometer
+        layout.addWidget(QLabel("Accelerometer (m/s²):"), 6, 0, 1, 2)
+        self.status_labels['accelerometer'] = QLabel("X: -- Y: -- Z: --")
+        self.status_labels['accelerometer'].setStyleSheet(self._get_value_label_style())
+        layout.addWidget(self.status_labels['accelerometer'], 7, 0, 1, 2)
+        
+        # Temperature
+        layout.addWidget(QLabel("Temperature:"), 8, 0)
+        self.status_labels['temperature'] = QLabel("--°C")
+        self.status_labels['temperature'].setStyleSheet(self._get_value_label_style())
+        layout.addWidget(self.status_labels['temperature'], 8, 1)
         
         return group
     
@@ -222,12 +234,12 @@ class StatusPanel(QWidget):
         
         # Joint count
         self.status_labels['joint_count'] = QLabel("Joints: --")
-        self.status_labels['joint_count'].setStyleSheet(self._get_info_label_style())
+        self.status_labels['joint_count'].setStyleSheet(self._get_value_label_style())
         layout.addWidget(self.status_labels['joint_count'])
         
         # Joint summary
         self.status_labels['joint_summary'] = QLabel("Position range: -- | Velocity range: --")
-        self.status_labels['joint_summary'].setStyleSheet(self._get_info_label_style())
+        self.status_labels['joint_summary'].setStyleSheet(self._get_value_label_style())
         layout.addWidget(self.status_labels['joint_summary'])
         
         return group
@@ -344,39 +356,51 @@ class StatusPanel(QWidget):
         self.imu_data = imu_data
         
         try:
-            # Convert quaternion to euler angles
-            orientation = imu_data.get('orientation', {})
-            if orientation:
-                roll, pitch, yaw = self._quaternion_to_euler(
-                    orientation.get('x', 0),
-                    orientation.get('y', 0),
-                    orientation.get('z', 0),
-                    orientation.get('w', 1)
-                )
+            # Orientation using direct RPY values
+            rpy = imu_data.get('rpy', {})
+            if rpy:
                 self.status_labels['orientation'].setText(
-                    f"R: {math.degrees(roll):.1f} P: {math.degrees(pitch):.1f} Y: {math.degrees(yaw):.1f}"
+                    f"R: {math.degrees(rpy.get('roll', 0)):.1f} "
+                    f"P: {math.degrees(rpy.get('pitch', 0)):.1f} "
+                    f"Y: {math.degrees(rpy.get('yaw', 0)):.1f}"
                 )
             
-            # Angular velocity
-            ang_vel = imu_data.get('angular_velocity', {})
-            if ang_vel:
-                self.status_labels['angular_vel'].setText(
-                    f"X: {math.degrees(ang_vel.get('x', 0)):.1f} "
-                    f"Y: {math.degrees(ang_vel.get('y', 0)):.1f} "
-                    f"Z: {math.degrees(ang_vel.get('z', 0)):.1f}"
+            # Quaternion
+            quaternion = imu_data.get('quaternion', {})
+            if quaternion:
+                self.status_labels['quaternion'].setText(
+                    f"X: {quaternion.get('x', 0):.3f} "
+                    f"Y: {quaternion.get('y', 0):.3f} "
+                    f"Z: {quaternion.get('z', 0):.3f} "
+                    f"W: {quaternion.get('w', 0):.3f}"
                 )
             
-            # Linear acceleration
-            lin_accel = imu_data.get('linear_acceleration', {})
-            if lin_accel:
-                self.status_labels['linear_accel'].setText(
-                    f"X: {lin_accel.get('x', 0):.2f} "
-                    f"Y: {lin_accel.get('y', 0):.2f} "
-                    f"Z: {lin_accel.get('z', 0):.2f}"
+            # Gyroscope (angular velocity)
+            gyroscope = imu_data.get('gyroscope', {})
+            if gyroscope:
+                self.status_labels['gyroscope'].setText(
+                    f"X: {math.degrees(gyroscope.get('x', 0)):.1f} "
+                    f"Y: {math.degrees(gyroscope.get('y', 0)):.1f} "
+                    f"Z: {math.degrees(gyroscope.get('z', 0)):.1f}"
                 )
+            
+            # Accelerometer
+            accelerometer = imu_data.get('accelerometer', {})
+            if accelerometer:
+                self.status_labels['accelerometer'].setText(
+                    f"X: {accelerometer.get('x', 0):.2f} "
+                    f"Y: {accelerometer.get('y', 0):.2f} "
+                    f"Z: {accelerometer.get('z', 0):.2f}"
+                )
+            
+            # Temperature
+            temperature = imu_data.get('temperature', 0)
+            self.status_labels['temperature'].setText(f"{temperature}°C")
             
         except Exception as e:
             print(f"Error updating IMU display: {e}")
+            import traceback
+            traceback.print_exc()
     
     @pyqtSlot(dict)
     def update_joints(self, joint_data: Dict[str, Any]) -> None:
