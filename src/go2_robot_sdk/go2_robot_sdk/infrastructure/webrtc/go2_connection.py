@@ -124,7 +124,7 @@ class Go2Connection:
     
     async def on_track(self, track: MediaStreamTrack) -> None:
         """Handle incoming media tracks (video)"""
-        logger.info("Receiving video")
+        # logger.info("Receiving video")
         
         if track.kind == "video" and self.on_video_frame:
             try:
