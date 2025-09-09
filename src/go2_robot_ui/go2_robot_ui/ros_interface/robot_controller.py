@@ -12,6 +12,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile
 from go2_interfaces.msg import WebRtcReq
 from std_msgs.msg import String
+from go2_robot_sdk.domain.constants.robot_commands import ROBOT_CMD
 
 
 class RobotController(QObject):
@@ -30,42 +31,8 @@ class RobotController(QObject):
     command_sent = pyqtSignal(str)
     command_failed = pyqtSignal(str)
     
-    # Robot command constants (from go2_robot_sdk)
-    ROBOT_COMMANDS = {
-        # Basic Actions
-        "Damp": 1001,
-        "BalanceStand": 1002,
-        "StopMove": 1003,
-        "StandUp": 1004,
-        "StandDown": 1005,
-        "RecoveryStand": 1006,
-        "Sit": 1009,
-        "RiseSit": 1010,
-        "Hello": 1016,
-        "Stretch": 1017,
-        
-        # Entertainment
-        "Dance1": 1022,
-        "Dance2": 1023,
-        "WiggleHips": 1033,
-        "FingerHeart": 1036,
-        
-        # Athletic
-        "FrontFlip": 1030,
-        "FrontJump": 1031,
-        "FrontPounce": 1032,
-        "Handstand": 1301,
-        "MoonWalk": 1305,
-        "Bound": 1304,
-        "CrossWalk": 1051,
-        
-        # Movement
-        "Move": 1008,
-        "SwitchGait": 1011,
-        "BodyHeight": 1013,
-        "FootRaiseHeight": 1014,
-        "SpeedLevel": 1015,
-    }
+    # Robot command constants (imported from go2_robot_sdk)
+    ROBOT_COMMANDS = ROBOT_CMD
     
     # QR code to action mapping
     QR_ACTION_MAP = {
