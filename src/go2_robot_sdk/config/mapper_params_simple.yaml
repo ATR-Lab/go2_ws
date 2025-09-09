@@ -1,0 +1,133 @@
+# ============================================================================
+# SIMPLIFIED SLAM TOOLBOX PARAMETERS - OPTIMIZED FOR LOW CPU USAGE
+# ============================================================================
+# This configuration prioritizes computational efficiency over maximum mapping quality
+# Designed to minimize CPU spikes while maintaining functional SLAM capability
+
+slam_toolbox:
+  ros__parameters:
+
+    # ============================================================================
+    # OPTIMIZATION PLUGIN PARAMETERS - SIMPLIFIED
+    # ============================================================================
+    
+    # Use simpler solver for lower CPU usage
+    solver_plugin: solver_plugins::CeresSolver
+    ceres_linear_solver: SPARSE_NORMAL_CHOLESKY
+    ceres_preconditioner: JACOBI                # Simpler than SCHUR_JACOBI
+    ceres_trust_strategy: LEVENBERG_MARQUARDT
+    ceres_dogleg_type: TRADITIONAL_DOGLEG
+    ceres_loss_function: None
+
+    # ============================================================================
+    # ROS FRAMEWORK PARAMETERS
+    # ============================================================================
+    
+    odom_frame: odom
+    map_frame: map
+    base_frame: base_footprint
+    scan_topic: /scan_restamped
+    use_map_saver: true
+    mode: mapping
+
+    # Start at dock for consistent initialization
+    map_start_at_dock: true
+
+    # ============================================================================
+    # MAPPING BEHAVIOR & PERFORMANCE - OPTIMIZED FOR LOW CPU
+    # ============================================================================
+    
+    debug_logging: false
+    
+    # Process fewer scans to reduce CPU load
+    throttle_scans: 2                           # Process every 2nd scan instead of all
+    
+    # Reduced publishing frequency
+    transform_publish_period: 0.1               # 10Hz instead of 50Hz
+    
+    # Much less frequent map updates to prevent I/O spikes
+    map_update_interval: 5.0                    # Every 5 seconds instead of 0.2s
+    
+    # Coarser resolution for smaller maps and faster processing
+    resolution: 0.1                             # 10cm instead of 5cm
+    
+    # Reduced laser range to limit processing
+    max_laser_range: 15.0                       # Reduced from 25.0m
+    
+    # Less frequent processing
+    minimum_time_interval: 0.5                  # Increased from 0.1s
+    
+    # Timeouts
+    transform_timeout: 0.5                      # Increased tolerance
+    tf_buffer_duration: 20.0                    # Reduced buffer size
+    
+    # Smaller stack for reduced memory usage
+    stack_size_to_use: 20000000                 # 20MB instead of 40MB
+    
+    # Disable interactive mode for better performance
+    enable_interactive_mode: false
+
+    # ============================================================================
+    # SCAN MATCHING & LOOP CLOSURE - SIMPLIFIED
+    # ============================================================================
+    
+    use_scan_matching: true
+    use_scan_barycenter: true
+    
+    # Less frequent updates to reduce processing
+    minimum_travel_distance: 0.3               # Increased from 0.05m
+    minimum_travel_heading: 0.3                # Increased from 0.1 rad
+    
+    # Smaller scan buffer
+    scan_buffer_size: 5                         # Reduced from 10
+    scan_buffer_maximum_scan_distance: 5.0      # Reduced from 10.0m
+    
+    # More tolerant matching thresholds
+    link_match_minimum_response_fine: 0.2       # Increased from 0.1
+    link_scan_maximum_distance: 1.0             # Reduced from 1.5m
+    
+    # Simplified loop closure
+    loop_search_maximum_distance: 2.0           # Reduced from 3.0m
+    do_loop_closing: true
+    loop_match_minimum_chain_size: 5            # Reduced from 10
+    loop_match_maximum_variance_coarse: 2.0     # Reduced from 3.0
+    loop_match_minimum_response_coarse: 0.3     # Reduced from 0.35
+    loop_match_minimum_response_fine: 0.4       # Reduced from 0.45
+
+    # ============================================================================
+    # CORRELATION & SEARCH SPACE - REDUCED PRECISION FOR SPEED
+    # ============================================================================
+    
+    # Smaller search spaces for faster processing
+    correlation_search_space_dimension: 0.3     # Reduced from 0.5m
+    correlation_search_space_resolution: 0.01   # Coarser from 0.005m
+    correlation_search_space_smear_deviation: 0.03  # Reduced smoothing
+
+    # ============================================================================
+    # LOOP CLOSURE SEARCH - SIMPLIFIED
+    # ============================================================================
+    
+    # Much smaller search space to prevent CPU spikes
+    loop_search_space_dimension: 4.0            # Reduced from 8.0m
+    loop_search_space_resolution: 0.1           # Coarser from 0.05m
+    loop_search_space_smear_deviation: 0.02     # Reduced smoothing
+
+    # ============================================================================
+    # SCAN MATCHER OPTIMIZATION - SIMPLIFIED
+    # ============================================================================
+    
+    # Simplified penalty weights
+    distance_variance_penalty: 0.3              # Reduced from 0.5
+    angle_variance_penalty: 0.5                 # Reduced from 1.0
+
+    # Coarser search angles for faster processing
+    fine_search_angle_offset: 0.01              # Coarser from 0.00349
+    coarse_search_angle_offset: 0.5             # Coarser from 0.349
+    coarse_angle_resolution: 0.1                # Coarser from 0.0349
+    
+    # More tolerant penalties
+    minimum_angle_penalty: 0.7                  # Reduced from 0.9
+    minimum_distance_penalty: 0.3               # Reduced from 0.5
+    
+    # Disable response expansion for simpler processing
+    use_response_expansion: false               # Disabled for speed
