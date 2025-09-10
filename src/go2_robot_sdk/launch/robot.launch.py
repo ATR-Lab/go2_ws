@@ -70,6 +70,7 @@ class Go2LaunchConfig:
             'rviz': os.path.join(self.package_dir, 'config', self.rviz_config),
             'urdf': os.path.join(self.package_dir, 'urdf', self.urdf_file),
             'collision_monitor': os.path.join(self.package_dir, 'config', 'collision_monitor_params.yaml'),
+            'custom_bt': os.path.join(self.package_dir, 'config', 'navigate_to_pose_w_replanning_and_recovery_custom.xml'),
         }
 
 
@@ -90,6 +91,7 @@ class Go2NodeFactory:
             DeclareLaunchArgument('teleop', default_value='true', description='Launch teleoperation'),
             DeclareLaunchArgument('collision_monitor', default_value='true', description='Launch collision monitor'),
             DeclareLaunchArgument('use_scan_restamper', default_value='true', description='Use scan restamper for frame conversion'),
+            DeclareLaunchArgument('custom_bt_xml', default_value='navigate_to_pose_w_replanning_and_recovery_custom.xml', description='Custom behavior tree XML file name'),
         ]
     
     def create_robot_state_nodes(self) -> List[Node]:
@@ -385,6 +387,7 @@ class Go2NodeFactory:
                 launch_arguments={
                     'params_file': self.config.config_paths['nav2'],
                     'use_sim_time': use_sim_time,
+                    'custom_bt_xml_path': self.config.config_paths['custom_bt'],
                 }.items(),
             ),
         ])

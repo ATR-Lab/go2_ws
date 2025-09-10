@@ -292,7 +292,8 @@ bt_navigator:
     # - Graduated recovery: gentle -> moderate -> aggressive
     # - Transform-specific recovery with 8s waits for timing sync
     # - Faster backup speed (5->10 cm/s) for efficient recovery
-    default_nav_to_pose_bt_xml: "/home/kpatch/development/go2_ws/src/go2_robot_sdk/config/navigate_to_pose_w_replanning_and_recovery_custom.xml"  # Custom BT addressing transform timing issues
+    # Path resolved via launch parameter substitution for portability
+    default_nav_to_pose_bt_xml: $(var custom_bt_xml_path)  # Custom BT path from launch parameter
     
     # default_nav_through_poses_bt_xml: Behavior tree for multi-waypoint navigation
     # Expected: Valid file path to XML behavior tree definition  
@@ -308,10 +309,10 @@ bt_navigator:
     # --- SINGLE GOAL NAVIGATION BEHAVIOR TREES ---
     
     # 1. CUSTOM EVENT-DRIVEN REPLANNING (CURRENT - ADDRESSES TRANSFORM TIMING ISSUES)
-    # default_nav_to_pose_bt_xml: "/home/kpatch/development/go2_ws/src/go2_robot_sdk/config/navigate_to_pose_w_replanning_and_recovery_custom.xml"
+    # default_nav_to_pose_bt_xml: $(var custom_bt_xml_path)  # Path resolved via launch parameter
     # WHEN TO USE: Best for Go2 robot with WebRTC timing challenges
     # MODIFICATIONS: Reduced retries, timeout protection, graduated recovery, transform-specific recovery
-    # PROS: Prevents navigation aborts, handles transform timing issues, efficient recovery
+    # PROS: Prevents navigation aborts, handles transform timing issues, efficient recovery, portable path
     # CONS: Slightly more conservative than default
     # IDEAL FOR: Go2 robot with WebRTC latency, transform cache timing issues
     
