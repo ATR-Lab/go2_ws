@@ -157,47 +157,57 @@ class LidarDecoder:
 
     def decode(self, compressed_data, data):
         """Original decode method that actually works with the WASM module"""
-        self.add_value_arr(self.input, compressed_data)
+        # COMMENTED OUT FOR CPU SPIKE TESTING - WASM decoder is suspected cause of 500ms blocking
+        # self.add_value_arr(self.input, compressed_data)
 
-        some_v = math.floor(data["origin"][2] / data["resolution"])
+        # some_v = math.floor(data["origin"][2] / data["resolution"])
 
-        self.generate(
-            self.store,
-            self.input,
-            len(compressed_data),
-            self.decompressBufferSize,
-            self.decompressBuffer,
-            self.decompressedSize,
-            self.positions,
-            self.uvs,
-            self.indices,
-            self.faceCount,
-            self.pointCount,
-            some_v
-        )
+        # self.generate(
+        #     self.store,
+        #     self.input,
+        #     len(compressed_data),
+        #     self.decompressBufferSize,
+        #     self.decompressBuffer,
+        #     self.decompressedSize,
+        #     self.positions,
+        #     self.uvs,
+        #     self.indices,
+        #     self.faceCount,
+        #     self.pointCount,
+        #     some_v
+        # )
 
-        self.get_value(self.decompressedSize, "i32")
-        c = self.get_value(self.pointCount, "i32")
-        u = self.get_value(self.faceCount, "i32")
+        # self.get_value(self.decompressedSize, "i32")
+        # c = self.get_value(self.pointCount, "i32")
+        # u = self.get_value(self.faceCount, "i32")
 
-        positions_slice = self.HEAPU8[self.positions:self.positions + u * 12]
-        positions_copy = bytearray(positions_slice)
-        p = np.frombuffer(positions_copy, dtype=np.uint8)
+        # positions_slice = self.HEAPU8[self.positions:self.positions + u * 12]
+        # positions_copy = bytearray(positions_slice)
+        # p = np.frombuffer(positions_copy, dtype=np.uint8)
 
-        uvs_slice = self.HEAPU8[self.uvs:self.uvs + u * 8]
-        uvs_copy = bytearray(uvs_slice)
-        r = np.frombuffer(uvs_copy, dtype=np.uint8)
+        # uvs_slice = self.HEAPU8[self.uvs:self.uvs + u * 8]
+        # uvs_copy = bytearray(uvs_slice)
+        # r = np.frombuffer(uvs_copy, dtype=np.uint8)
 
-        indices_slice = self.HEAPU8[self.indices:self.indices + u * 24]
-        indices_copy = bytearray(indices_slice)
-        o = np.frombuffer(indices_copy, dtype=np.uint32)
+        # indices_slice = self.HEAPU8[self.indices:self.indices + u * 24]
+        # indices_copy = bytearray(indices_slice)
+        # o = np.frombuffer(indices_copy, dtype=np.uint32)
 
+        # return {
+        #     "point_count": c,
+        #     "face_count": u,
+        #     "positions": p,
+        #     "uvs": r,
+        #     "indices": o
+        # }
+        
+        # Return empty result to avoid breaking downstream code
         return {
-            "point_count": c,
-            "face_count": u,
-            "positions": p,
-            "uvs": r,
-            "indices": o
+            "point_count": 0,
+            "face_count": 0,
+            "positions": np.array([], dtype=np.uint8),
+            "uvs": np.array([], dtype=np.uint8),
+            "indices": np.array([], dtype=np.uint32)
         }
 
 
