@@ -42,19 +42,22 @@ class ROS2Publisher(IRobotDataPublisher):
         try:
             robot_idx = int(robot_data.robot_id)
             
+            # Single timestamp for both transform and odometry to ensure logical consistency
+            current_time = self.node.get_clock().now().to_msg()
+            
             # Publish transform
-            self._publish_transform(robot_data, robot_idx)
+            self._publish_transform(robot_data, robot_idx, current_time)
             
             # Publish odometry topic
-            self._publish_odometry_topic(robot_data, robot_idx)
+            self._publish_odometry_topic(robot_data, robot_idx, current_time)
             
         except Exception as e:
             logger.error(f"Error publishing odometry: {e}")
 
-    def _publish_transform(self, robot_data: RobotData, robot_idx: int) -> None:
+    def _publish_transform(self, robot_data: RobotData, robot_idx: int, current_time) -> None:
         """Publish TF transform"""
         odom_trans = TransformStamped()
-        odom_trans.header.stamp = self.node.get_clock().now().to_msg()
+        odom_trans.header.stamp = current_time
         odom_trans.header.frame_id = 'odom'
 
         if self.config.conn_mode == 'single':
@@ -76,10 +79,10 @@ class ROS2Publisher(IRobotDataPublisher):
 
         self.broadcaster.sendTransform(odom_trans)
 
-    def _publish_odometry_topic(self, robot_data: RobotData, robot_idx: int) -> None:
+    def _publish_odometry_topic(self, robot_data: RobotData, robot_idx: int, current_time) -> None:
         """Publish Odometry topic"""
         odom_msg = Odometry()
-        odom_msg.header.stamp = self.node.get_clock().now().to_msg()
+        odom_msg.header.stamp = current_time
         odom_msg.header.frame_id = 'odom'
 
         if self.config.conn_mode == 'single':
@@ -108,8 +111,11 @@ class ROS2Publisher(IRobotDataPublisher):
 
         try:
             robot_idx = int(robot_data.robot_id)
+            # Phase 1 optimization: single timestamp call per message to reduce system call overhead
+            current_time = self.node.get_clock().now().to_msg()
+            
             joint_state = JointState()
-            joint_state.header.stamp = self.node.get_clock().now().to_msg()
+            joint_state.header.stamp = current_time
 
             # Define joint names
             if self.config.conn_mode == 'single':
@@ -181,37 +187,54 @@ class ROS2Publisher(IRobotDataPublisher):
 
     def publish_lidar_data(self, robot_data: RobotData) -> None:
         """Publish lidar data"""
-        if not robot_data.lidar_data or not self.config.decode_lidar:
-            return
+        # COMMENTED OUT FOR CPU SPIKE TESTING - Point cloud processing suspected cause of high CPU usage
+        # if not robot_data.lidar_data or not self.config.decode_lidar:
+        #     return
 
+        # try:
+        #     robot_idx = int(robot_data.robot_id)
+        #     lidar = robot_data.lidar_data
+
+        #     points = update_meshes_for_cloud2(
+        #         lidar.positions,
+        #         lidar.uvs,
+        #         lidar.resolution,
+        #         lidar.origin,
+        #         0
+        #     )
+
+        #     # Phase 1 optimization: single timestamp call per message to reduce system call overhead
+        #     current_time = self.node.get_clock().now().to_msg()
+        #     
+        #     point_cloud = PointCloud2()
+        #     point_cloud.header = Header(frame_id="odom")
+        #     point_cloud.header.stamp = current_time
+        #     
+        #     fields = [
+        #         PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
+        #         PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
+        #         PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
+        #         PointField(name='intensity', offset=12, datatype=PointField.FLOAT32, count=1),
+        #     ]
+        #     
+        #     point_cloud = point_cloud2.create_cloud(point_cloud.header, fields, points)
+        #     self.publishers['lidar'][robot_idx].publish(point_cloud)
+
+        # except Exception as e:
+        #     logger.error(f"Error publishing lidar data: {e}")
+        
+        # Skip LiDAR publishing during CPU spike testing
+        return
+
+    def has_camera_subscribers(self, robot_id: str) -> bool:
+        """Check if there are active subscribers to camera topics"""
         try:
-            robot_idx = int(robot_data.robot_id)
-            lidar = robot_data.lidar_data
-
-            points = update_meshes_for_cloud2(
-                lidar.positions,
-                lidar.uvs,
-                lidar.resolution,
-                lidar.origin,
-                0
-            )
-
-            point_cloud = PointCloud2()
-            point_cloud.header = Header(frame_id="odom")
-            point_cloud.header.stamp = self.node.get_clock().now().to_msg()
-            
-            fields = [
-                PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
-                PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
-                PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
-                PointField(name='intensity', offset=12, datatype=PointField.FLOAT32, count=1),
-            ]
-            
-            point_cloud = point_cloud2.create_cloud(point_cloud.header, fields, points)
-            self.publishers['lidar'][robot_idx].publish(point_cloud)
-
-        except Exception as e:
-            logger.error(f"Error publishing lidar data: {e}")
+            robot_idx = int(robot_id)
+            camera_subs = self.publishers['camera'][robot_idx].get_subscription_count()
+            camera_info_subs = self.publishers['camera_info'][robot_idx].get_subscription_count()
+            return camera_subs > 0 or camera_info_subs > 0
+        except Exception:
+            return True  # Default to processing if check fails
 
     def publish_camera_data(self, robot_data: RobotData) -> None:
         """Publish camera data"""
@@ -222,13 +245,23 @@ class ROS2Publisher(IRobotDataPublisher):
             robot_idx = int(robot_data.robot_id)
             camera = robot_data.camera_data
 
+            # Phase 1 optimization: single timestamp call per message to reduce system call overhead
+            current_time = self.node.get_clock().now().to_msg()
+
             # Convert to ROS Image
             ros_image = self.bridge.cv2_to_imgmsg(camera.image, encoding=camera.encoding)
-            ros_image.header.stamp = self.node.get_clock().now().to_msg()
+            ros_image.header.stamp = current_time
 
-            # Camera info
+            # Camera info - reuse same timestamp for consistency
+            # Phase 1: Direct lookup with explicit error handling (no fallback)
+            if camera.height not in self.camera_info:
+                available = list(self.camera_info.keys())
+                raise ValueError(f"No camera calibration found for {camera.height}p resolution. "
+                               f"Available resolutions: {available}. "
+                               f"Ensure front_camera_{camera.height}.yaml exists in calibration directory.")
+            
             camera_info = self.camera_info[camera.height]
-            camera_info.header.stamp = ros_image.header.stamp
+            camera_info.header.stamp = current_time
 
             if self.config.conn_mode == 'single':
                 camera_info.header.frame_id = 'front_camera'
