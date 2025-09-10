@@ -187,44 +187,40 @@ class ROS2Publisher(IRobotDataPublisher):
 
     def publish_lidar_data(self, robot_data: RobotData) -> None:
         """Publish lidar data"""
-        # COMMENTED OUT FOR CPU SPIKE TESTING - Point cloud processing suspected cause of high CPU usage
-        # if not robot_data.lidar_data or not self.config.decode_lidar:
-        #     return
+        if not robot_data.lidar_data or not self.config.decode_lidar:
+            return
 
-        # try:
-        #     robot_idx = int(robot_data.robot_id)
-        #     lidar = robot_data.lidar_data
+        try:
+            robot_idx = int(robot_data.robot_id)
+            lidar = robot_data.lidar_data
 
-        #     points = update_meshes_for_cloud2(
-        #         lidar.positions,
-        #         lidar.uvs,
-        #         lidar.resolution,
-        #         lidar.origin,
-        #         0
-        #     )
+            points = update_meshes_for_cloud2(
+                lidar.positions,
+                lidar.uvs,
+                lidar.resolution,
+                lidar.origin,
+                0
+            )
 
-        #     # Phase 1 optimization: single timestamp call per message to reduce system call overhead
-        #     current_time = self.node.get_clock().now().to_msg()
-        #     
-        #     point_cloud = PointCloud2()
-        #     point_cloud.header = Header(frame_id="odom")
-        #     point_cloud.header.stamp = current_time
-        #     
-        #     fields = [
-        #         PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
-        #         PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
-        #         PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
-        #         PointField(name='intensity', offset=12, datatype=PointField.FLOAT32, count=1),
-        #     ]
-        #     
-        #     point_cloud = point_cloud2.create_cloud(point_cloud.header, fields, points)
-        #     self.publishers['lidar'][robot_idx].publish(point_cloud)
+            # Phase 1 optimization: single timestamp call per message to reduce system call overhead
+            current_time = self.node.get_clock().now().to_msg()
+            
+            point_cloud = PointCloud2()
+            point_cloud.header = Header(frame_id="odom")
+            point_cloud.header.stamp = current_time
+            
+            fields = [
+                PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
+                PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
+                PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
+                PointField(name='intensity', offset=12, datatype=PointField.FLOAT32, count=1),
+            ]
+            
+            point_cloud = point_cloud2.create_cloud(point_cloud.header, fields, points)
+            self.publishers['lidar'][robot_idx].publish(point_cloud)
 
-        # except Exception as e:
-        #     logger.error(f"Error publishing lidar data: {e}")
-        
-        # Skip LiDAR publishing during CPU spike testing
-        return
+        except Exception as e:
+            logger.error(f"Error publishing lidar data: {e}")
 
     def has_camera_subscribers(self, robot_id: str) -> bool:
         """Check if there are active subscribers to camera topics"""

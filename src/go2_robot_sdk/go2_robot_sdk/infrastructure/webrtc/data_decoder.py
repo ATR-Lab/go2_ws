@@ -218,43 +218,27 @@ def deal_array_buffer(buffer: bytes, perform_decode: bool = True) -> Optional[Di
         return None
     
     try:
-        # COMMENTED OUT FOR CPU SPIKE TESTING - LiDAR processing suspected cause of blocking
         # Use original implementation for full compatibility
-        # if _global_lidar_decoder and perform_decode:
-        #     import struct
-        #     import json
-        #     
-        #     length = struct.unpack("H", buffer[:2])[0]
-        #     json_segment = buffer[4: 4 + length]
-        #     compressed_data = buffer[4 + length:]
-        #     json_str = json_segment.decode("utf-8")
-        #     obj = json.loads(json_str)
-        #     
-        #     if compressed_data:
-        #         decoded_data = _global_lidar_decoder.decode(compressed_data, obj['data'])
-        #         obj["decoded_data"] = decoded_data
-        #     else:
-        #         obj["compressed_data"] = compressed_data
-        #     return obj
-        # else:
-        #     # Fallback to new decoder
-        #     decoder = get_data_decoder(enable_lidar=perform_decode)
-        #     return decoder.decode_array_buffer(buffer)
-        
-        # Return minimal data structure to avoid breaking downstream code
-        return {
-            "data": {
-                "origin": [0, 0, 0],
-                "resolution": 0.1
-            },
-            "decoded_data": {
-                "point_count": 0,
-                "face_count": 0,
-                "positions": [],
-                "uvs": [],
-                "indices": []
-            }
-        }
+        if _global_lidar_decoder and perform_decode:
+            import struct
+            import json
+            
+            length = struct.unpack("H", buffer[:2])[0]
+            json_segment = buffer[4: 4 + length]
+            compressed_data = buffer[4 + length:]
+            json_str = json_segment.decode("utf-8")
+            obj = json.loads(json_str)
+            
+            if compressed_data:
+                decoded_data = _global_lidar_decoder.decode(compressed_data, obj['data'])
+                obj["decoded_data"] = decoded_data
+            else:
+                obj["compressed_data"] = compressed_data
+            return obj
+        else:
+            # Fallback to new decoder
+            decoder = get_data_decoder(enable_lidar=perform_decode)
+            return decoder.decode_array_buffer(buffer)
             
     except Exception as e:
         logger.error(f"Error in deal_array_buffer: {e}")

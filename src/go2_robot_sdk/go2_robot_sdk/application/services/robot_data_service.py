@@ -24,13 +24,12 @@ class RobotDataService:
             topic = msg.get('topic')
             robot_data = RobotData(robot_id=robot_id, timestamp=0.0)
 
-            # COMMENTED OUT FOR CPU SPIKE TESTING - LiDAR processing suspected cause of blocking
-            # if topic == RTC_TOPIC["ULIDAR_ARRAY"]:
-            #     self._process_lidar_data(msg, robot_data)
-            #     self.publisher.publish_lidar_data(robot_data)
-            #     self.publisher.publish_voxel_data(robot_data)
+            if topic == RTC_TOPIC["ULIDAR_ARRAY"]:
+                self._process_lidar_data(msg, robot_data)
+                self.publisher.publish_lidar_data(robot_data)
+                self.publisher.publish_voxel_data(robot_data)
 
-            if topic == RTC_TOPIC["ROBOTODOM"]:
+            elif topic == RTC_TOPIC["ROBOTODOM"]:
                 self._process_odometry_data(msg, robot_data)
                 self.publisher.publish_odometry(robot_data)
 
