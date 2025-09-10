@@ -89,6 +89,7 @@ class Go2NodeFactory:
             DeclareLaunchArgument('joystick', default_value='true', description='Launch joystick'),
             DeclareLaunchArgument('teleop', default_value='true', description='Launch teleoperation'),
             DeclareLaunchArgument('collision_monitor', default_value='true', description='Launch collision monitor'),
+            DeclareLaunchArgument('use_scan_restamper', default_value='true', description='Use scan restamper for frame conversion'),
         ]
     
     def create_robot_state_nodes(self) -> List[Node]:
@@ -238,6 +239,7 @@ class Go2NodeFactory:
                 package='scan_restamper',
                 executable='scan_restamper_node',
                 name='scan_restamper_node',
+                condition=IfCondition(LaunchConfiguration('use_scan_restamper', default='true')),
                 parameters=[{
                     'input_topic': '/scan',
                     'output_topic': '/scan_restamped',
