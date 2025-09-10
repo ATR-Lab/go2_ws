@@ -1,8 +1,10 @@
 # Copyright (c) 2024, RoboVerse community
 # SPDX-License-Identifier: BSD-3-Clause
 
+import asyncio
 import logging
 import math
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any
 
 from ...domain.entities import RobotData, RobotState, IMUData, OdometryData, JointData, LidarData
@@ -17,32 +19,88 @@ class RobotDataService:
 
     def __init__(self, publisher: IRobotDataPublisher):
         self.publisher = publisher
+        # Thread pool for async LiDAR processing only
+        self.lidar_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="lidar")
+        # Shared LiDAR decoder instance - initialize once, reuse across threads
+        self.lidar_decoder = None
+        self._init_lidar_decoder()
 
     def process_webrtc_message(self, msg: Dict[str, Any], robot_id: str) -> None:
-        """Process WebRTC message"""
+        """Process WebRTC message with async LiDAR processing"""
         try:
             topic = msg.get('topic')
-            robot_data = RobotData(robot_id=robot_id, timestamp=0.0)
 
             if topic == RTC_TOPIC["ULIDAR_ARRAY"]:
-                self._process_lidar_data(msg, robot_data)
-                self.publisher.publish_lidar_data(robot_data)
-                self.publisher.publish_voxel_data(robot_data)
+                # Process LiDAR asynchronously - don't block other messages
+                asyncio.create_task(self._process_lidar_async(msg, robot_id))
 
-            elif topic == RTC_TOPIC["ROBOTODOM"]:
-                self._process_odometry_data(msg, robot_data)
-                self.publisher.publish_odometry(robot_data)
+            else:
+                # Process all other messages immediately (they're fast)
+                robot_data = RobotData(robot_id=robot_id, timestamp=0.0)
 
-            elif topic == RTC_TOPIC["LF_SPORT_MOD_STATE"]:
-                self._process_sport_mode_state(msg, robot_data)
-                self.publisher.publish_robot_state(robot_data)
+                if topic == RTC_TOPIC["ROBOTODOM"]:
+                    self._process_odometry_data(msg, robot_data)
+                    self.publisher.publish_odometry(robot_data)
 
-            elif topic == RTC_TOPIC["LOW_STATE"]:
-                self._process_low_state(msg, robot_data)
-                self.publisher.publish_joint_state(robot_data)
+                elif topic == RTC_TOPIC["LF_SPORT_MOD_STATE"]:
+                    self._process_sport_mode_state(msg, robot_data)
+                    self.publisher.publish_robot_state(robot_data)
+
+                elif topic == RTC_TOPIC["LOW_STATE"]:
+                    self._process_low_state(msg, robot_data)
+                    self.publisher.publish_joint_state(robot_data)
 
         except Exception as e:
             logger.error(f"Error processing WebRTC message: {e}")
+
+    def _init_lidar_decoder(self) -> None:
+        """Initialize shared LiDAR decoder instance"""
+        try:
+            from ...infrastructure.sensors.lidar_decoder import LidarDecoder
+            self.lidar_decoder = LidarDecoder()
+            logger.info("Initialized shared LiDAR decoder instance")
+        except Exception as e:
+            logger.error(f"Failed to initialize LiDAR decoder: {e}")
+            self.lidar_decoder = None
+
+    async def _process_lidar_async(self, msg: Dict[str, Any], robot_id: str) -> None:
+        """Process LiDAR data asynchronously to prevent blocking other messages"""
+        try:
+            if not self.lidar_decoder:
+                logger.warning("LiDAR decoder not available, skipping LiDAR processing")
+                return
+                
+            # Move WASM decoding to thread pool using shared decoder
+            compressed_data = msg.get("compressed_data")
+            data = msg.get("data", {})
+            
+            if compressed_data and data:
+                loop = asyncio.get_event_loop()
+                
+                # Use shared decoder instance in thread pool
+                decoded_result = await loop.run_in_executor(
+                    self.lidar_executor,
+                    self.lidar_decoder.decode,
+                    compressed_data,
+                    data
+                )
+                
+                # Add decoded data to message for processing
+                msg_with_decoded = msg.copy()
+                msg_with_decoded["decoded_data"] = decoded_result
+                
+                # Process and publish (fast operations)
+                robot_data = RobotData(robot_id=robot_id, timestamp=0.0)
+                self._process_lidar_data(msg_with_decoded, robot_data)
+                
+                if robot_data.lidar_data:
+                    self.publisher.publish_lidar_data(robot_data)
+                    self.publisher.publish_voxel_data(robot_data)
+            else:
+                logger.warning("No compressed LiDAR data to process")
+                
+        except Exception as e:
+            logger.error(f"Error in async LiDAR processing: {e}")
 
     def _process_lidar_data(self, msg: Dict[str, Any], robot_data: RobotData) -> None:
         """Process lidar data"""

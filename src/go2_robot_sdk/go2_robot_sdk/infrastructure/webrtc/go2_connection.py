@@ -113,7 +113,8 @@ class Go2Connection:
                     
             elif isinstance(message, bytes):
                 # Binary message - likely compressed data
-                msgobj = legacy_deal_array_buffer(message, perform_decode=self.decode_lidar)
+                # Don't decode LiDAR here - pass compressed data for async processing
+                msgobj = legacy_deal_array_buffer(message, perform_decode=False)
             
             # Forward message to callback
             if self.on_message:
