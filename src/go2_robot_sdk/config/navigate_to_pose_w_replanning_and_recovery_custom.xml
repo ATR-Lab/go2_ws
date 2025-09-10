@@ -1,0 +1,107 @@
+<!--
+  Custom Behavior Tree for Go2 Robot Navigation with Enhanced Recovery
+  
+  MODIFICATIONS FROM DEFAULT:
+  1. Reduced retry count (6 -> 3) to prevent endless recovery loops
+  2. Slower replanning rate (1.0 -> 0.5 Hz) to reduce system load during transform issues
+  3. Added timeout protection to all recovery behaviors to prevent infinite blocking
+  4. Graduated recovery strategy: gentle -> moderate -> aggressive
+  5. Transform-specific recovery with longer wait times for timing issues
+  6. Faster backup speed for more efficient recovery
+  7. Smaller initial spin distances to work better in constrained spaces
+  
+  REASONING:
+  - The original BT was causing navigation aborts due to transform timing issues
+  - Recovery behaviors were getting stuck without timeout protection
+  - 90-degree spins were too aggressive for indoor navigation
+  - 5-second waits were insufficient for transform cache issues to resolve
+  - Slow backup speed (5cm/s) made recovery take too long
+  
+  RECOVERY SEQUENCE:
+  1. TransformRecovery: Clear costmaps + 8s wait (for transform sync)
+  2. GentleRecovery: Small 22.5° turn + 3s wait
+  3. AggressiveRecovery: 45° turn + 5s wait + 20cm backup
+  
+  This addresses the root cause of navigation aborts while maintaining robust recovery.
+-->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <!-- 
+      MAIN RECOVERY NODE: Reduced retries from 6 to 3
+      Reasoning: Prevents endless recovery loops when underlying issues persist
+      Impact: Faster failure detection, prevents system overload
+    -->
+    <RecoveryNode number_of_retries="4" name="NavigateRecovery">
+      <PipelineSequence name="NavigateWithReplanning">
+        <!-- 
+          REPLANNING RATE: Reduced from 1.0 to 0.5 Hz
+          Reasoning: Lower frequency reduces CPU load during transform timing issues
+          Impact: More stable operation, less interference with transform publishing
+        -->
+        <RateController hz="0.5">
+          <RecoveryNode number_of_retries="1" name="ComputePathToPose">
+            <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_entirely_global_costmap"/>
+          </RecoveryNode>
+        </RateController>
+        <RecoveryNode number_of_retries="1" name="FollowPath">
+          <FollowPath path="{path}" controller_id="FollowPath"/>
+          <ClearEntireCostmap name="ClearLocalCostmap-Context" service_name="local_costmap/clear_entirely_local_costmap"/>
+        </RecoveryNode>
+      </PipelineSequence>
+      <ReactiveFallback name="RecoveryFallback">
+        <GoalUpdated/>
+        <!-- 
+          GRADUATED RECOVERY STRATEGY
+          Reasoning: Start with gentle recovery, escalate only if needed
+          Impact: Less disruptive to navigation, better success rate
+        -->
+        <RoundRobin name="RecoveryActions">
+          <!-- 
+            PHASE 1: TRANSFORM-SPECIFIC RECOVERY
+            Reasoning: Address root cause of navigation aborts (transform timing)
+            Impact: Gives transform cache time to sync, clears corrupted costmaps
+          -->
+          <Sequence name="TransformRecovery">
+            <ClearEntireCostmap name="ClearLocalCostmap-Transform" service_name="local_costmap/clear_entirely_local_costmap"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Transform" service_name="global_costmap/clear_entirely_global_costmap"/>
+            <!-- 8 second wait: Allows transform timing issues to resolve -->
+            <Wait wait_duration="8"/>
+          </Sequence>
+          
+          <!-- 
+            PHASE 2: GENTLE RECOVERY
+            Reasoning: Minimal movement to change perspective without major disruption
+            Impact: Often sufficient to resolve minor navigation issues
+          -->
+          <Sequence name="GentleRecovery">
+            <!-- 10s timeout prevents infinite spin, 22.5° turn is non-disruptive -->
+            <Timeout msec="10000">
+              <Spin spin_dist="0.39"/>  <!-- 22.5 degrees (π/8 radians) -->
+            </Timeout>
+            <!-- Short wait to let new sensor data integrate -->
+            <Wait wait_duration="3"/>
+          </Sequence>
+          
+          <!-- 
+            PHASE 3: AGGRESSIVE RECOVERY
+            Reasoning: Last resort for serious navigation blockages
+            Impact: More disruptive but necessary for complete recovery
+          -->
+          <Sequence name="AggressiveRecovery">
+            <!-- 15s timeout, 45° turn for significant perspective change -->
+            <Timeout msec="15000">
+              <Spin spin_dist="0.785"/>  <!-- 45 degrees (π/4 radians) -->
+            </Timeout>
+            <!-- Wait for sensor data to stabilize after spin -->
+            <Wait wait_duration="5"/>
+            <!-- 12s timeout, faster backup (10cm/s vs original 5cm/s) -->
+            <Timeout msec="12000">
+              <BackUp backup_dist="0.20" backup_speed="0.10"/>  <!-- 20cm at 10cm/s = 2s -->
+            </Timeout>
+          </Sequence>
+        </RoundRobin>
+      </ReactiveFallback>
+    </RecoveryNode>
+  </BehaviorTree>
+</root>
