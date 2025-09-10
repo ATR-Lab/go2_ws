@@ -24,12 +24,13 @@ class RobotDataService:
             topic = msg.get('topic')
             robot_data = RobotData(robot_id=robot_id, timestamp=0.0)
 
-            if topic == RTC_TOPIC["ULIDAR_ARRAY"]:
-                self._process_lidar_data(msg, robot_data)
-                self.publisher.publish_lidar_data(robot_data)
-                self.publisher.publish_voxel_data(robot_data)
+            # COMMENTED OUT FOR CPU SPIKE TESTING - LiDAR processing suspected cause of blocking
+            # if topic == RTC_TOPIC["ULIDAR_ARRAY"]:
+            #     self._process_lidar_data(msg, robot_data)
+            #     self.publisher.publish_lidar_data(robot_data)
+            #     self.publisher.publish_voxel_data(robot_data)
 
-            elif topic == RTC_TOPIC["ROBOTODOM"]:
+            if topic == RTC_TOPIC["ROBOTODOM"]:
                 self._process_odometry_data(msg, robot_data)
                 self.publisher.publish_odometry(robot_data)
 
@@ -70,12 +71,19 @@ class RobotDataService:
             position = pose_data['position']
             orientation = pose_data['orientation']
 
-            # Data validation
+            # Data validation - Phase 1 optimization: type-check first for faster rejection
             pos_vals = [position['x'], position['y'], position['z']]
             rot_vals = [orientation['x'], orientation['y'], orientation['z'], orientation['w']]
+            all_vals = pos_vals + rot_vals
 
-            if not all(isinstance(v, (int, float)) and math.isfinite(v) for v in pos_vals + rot_vals):
-                logger.warning("Invalid odometry data - skipping")
+            # Fast path: check types first (cheaper operation)
+            if not all(isinstance(v, (int, float)) for v in all_vals):
+                logger.warning("Invalid odometry data types - skipping")
+                return
+            
+            # Only check finite values if types are correct (more expensive operation)
+            if not all(math.isfinite(v) for v in all_vals):
+                logger.warning("Invalid odometry data values - skipping")
                 return
 
             robot_data.odometry_data = OdometryData(
@@ -90,16 +98,23 @@ class RobotDataService:
         try:
             data = msg["data"]
 
-            # Data validation
-            if not self._validate_float_list(data.get("position", [])):
-                return
-            if not self._validate_float_list(data.get("range_obstacle", [])):
-                return
-            if not self._validate_float_list(data.get("foot_position_body", [])):
-                return
-            if not self._validate_float_list(data.get("foot_speed_body", [])):
-                return
+            # Data validation - Phase 1 optimization: consolidated validation to reduce function call overhead
+            validation_fields = [
+                ("position", data.get("position", [])),
+                ("range_obstacle", data.get("range_obstacle", [])),
+                ("foot_position_body", data.get("foot_position_body", [])),
+                ("foot_speed_body", data.get("foot_speed_body", []))
+            ]
+            
+            # Validate all float lists in one pass
+            for field_name, field_data in validation_fields:
+                if not self._validate_float_list(field_data):
+                    logger.warning(f"Invalid sport mode state data in field '{field_name}' - skipping")
+                    return
+            
+            # Validate single float value
             if not self._validate_float(data.get("body_height")):
+                logger.warning("Invalid sport mode state body_height - skipping")
                 return
 
             robot_data.robot_state = RobotState(
@@ -144,9 +159,17 @@ class RobotDataService:
             logger.error(f"Error processing low state: {e}")
 
     def _validate_float_list(self, data: list) -> bool:
-        """Validate a list of float values"""
-        return all(isinstance(x, (int, float)) and math.isfinite(x) for x in data)
+        """Validate a list of float values - Phase 1 optimization: type-check first"""
+        # Fast path: check types first (cheaper operation)
+        if not all(isinstance(x, (int, float)) for x in data):
+            return False
+        # Only check finite values if types are correct (more expensive operation)
+        return all(math.isfinite(x) for x in data)
 
     def _validate_float(self, value: Any) -> bool:
-        """Validate a float value"""
-        return isinstance(value, (int, float)) and math.isfinite(value) 
+        """Validate a float value - Phase 1 optimization: type-check first"""
+        # Fast path: check type first (cheaper operation)
+        if not isinstance(value, (int, float)):
+            return False
+        # Only check finite if type is correct (more expensive operation)
+        return math.isfinite(value) 
