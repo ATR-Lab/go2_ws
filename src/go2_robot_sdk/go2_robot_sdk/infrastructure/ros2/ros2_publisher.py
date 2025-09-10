@@ -18,7 +18,7 @@ from cv_bridge import CvBridge
 from ...domain.interfaces import IRobotDataPublisher
 from ...domain.entities import RobotData, RobotConfig
 from ..sensors.lidar_decoder import update_meshes_for_cloud2
-from ..sensors.camera_config import load_camera_info
+# from ..sensors.camera_config import load_camera_info
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class ROS2Publisher(IRobotDataPublisher):
         self.publishers = publishers
         self.broadcaster = broadcaster
         self.bridge = CvBridge()
-        self.camera_info = load_camera_info()
+        # self.camera_info = load_camera_info()
 
     def publish_odometry(self, robot_data: RobotData) -> None:
         """Publish odometry data"""
@@ -222,56 +222,56 @@ class ROS2Publisher(IRobotDataPublisher):
         except Exception as e:
             logger.error(f"Error publishing lidar data: {e}")
 
-    def has_camera_subscribers(self, robot_id: str) -> bool:
-        """Check if there are active subscribers to camera topics"""
-        try:
-            robot_idx = int(robot_id)
-            camera_subs = self.publishers['camera'][robot_idx].get_subscription_count()
-            camera_info_subs = self.publishers['camera_info'][robot_idx].get_subscription_count()
-            return camera_subs > 0 or camera_info_subs > 0
-        except Exception:
-            return True  # Default to processing if check fails
+    # def has_camera_subscribers(self, robot_id: str) -> bool:
+    #     """Check if there are active subscribers to camera topics"""
+    #     try:
+    #         robot_idx = int(robot_id)
+    #         camera_subs = self.publishers['camera'][robot_idx].get_subscription_count()
+    #         camera_info_subs = self.publishers['camera_info'][robot_idx].get_subscription_count()
+    #         return camera_subs > 0 or camera_info_subs > 0
+    #     except Exception:
+    #         return True  # Default to processing if check fails
 
-    def publish_camera_data(self, robot_data: RobotData) -> None:
-        """Publish camera data"""
-        if not robot_data.camera_data:
-            return
+    # def publish_camera_data(self, robot_data: RobotData) -> None:
+    #     """Publish camera data"""
+    #     if not robot_data.camera_data:
+    #         return
 
-        try:
-            robot_idx = int(robot_data.robot_id)
-            camera = robot_data.camera_data
+    #     try:
+    #         robot_idx = int(robot_data.robot_id)
+    #         camera = robot_data.camera_data
 
-            # Phase 1 optimization: single timestamp call per message to reduce system call overhead
-            current_time = self.node.get_clock().now().to_msg()
+    #         # Phase 1 optimization: single timestamp call per message to reduce system call overhead
+    #         current_time = self.node.get_clock().now().to_msg()
 
-            # Convert to ROS Image
-            ros_image = self.bridge.cv2_to_imgmsg(camera.image, encoding=camera.encoding)
-            ros_image.header.stamp = current_time
+    #         # Convert to ROS Image
+    #         ros_image = self.bridge.cv2_to_imgmsg(camera.image, encoding=camera.encoding)
+    #         ros_image.header.stamp = current_time
 
-            # Camera info - reuse same timestamp for consistency
-            # Phase 1: Direct lookup with explicit error handling (no fallback)
-            if camera.height not in self.camera_info:
-                available = list(self.camera_info.keys())
-                raise ValueError(f"No camera calibration found for {camera.height}p resolution. "
-                               f"Available resolutions: {available}. "
-                               f"Ensure front_camera_{camera.height}.yaml exists in calibration directory.")
-            
-            camera_info = self.camera_info[camera.height]
-            camera_info.header.stamp = current_time
+    #         # Camera info - reuse same timestamp for consistency
+    #         # Phase 1: Direct lookup with explicit error handling (no fallback)
+    #         if camera.height not in self.camera_info:
+    #             available = list(self.camera_info.keys())
+    #             raise ValueError(f"No camera calibration found for {camera.height}p resolution. "
+    #                            f"Available resolutions: {available}. "
+    #                            f"Ensure front_camera_{camera.height}.yaml exists in calibration directory.")
+    #         
+    #         camera_info = self.camera_info[camera.height]
+    #         camera_info.header.stamp = current_time
 
-            if self.config.conn_mode == 'single':
-                camera_info.header.frame_id = 'front_camera'
-                ros_image.header.frame_id = 'front_camera'
-            else:
-                camera_info.header.frame_id = f'robot{robot_data.robot_id}/front_camera'
-                ros_image.header.frame_id = f'robot{robot_data.robot_id}/front_camera'
+    #         if self.config.conn_mode == 'single':
+    #             camera_info.header.frame_id = 'front_camera'
+    #             ros_image.header.frame_id = 'front_camera'
+    #         else:
+    #             camera_info.header.frame_id = f'robot{robot_data.robot_id}/front_camera'
+    #             ros_image.header.frame_id = f'robot{robot_data.robot_id}/front_camera'
 
-            # Publish
-            self.publishers['camera'][robot_idx].publish(ros_image)
-            self.publishers['camera_info'][robot_idx].publish(camera_info)
+    #         # Publish
+    #         self.publishers['camera'][robot_idx].publish(ros_image)
+    #         self.publishers['camera_info'][robot_idx].publish(camera_info)
 
-        except Exception as e:
-            logger.error(f"Error publishing camera data: {e}")
+    #     except Exception as e:
+    #         logger.error(f"Error publishing camera data: {e}")
 
     def publish_voxel_data(self, robot_data: RobotData) -> None:
         """Publish voxel data"""

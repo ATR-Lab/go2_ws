@@ -24,7 +24,7 @@ class WebRTCAdapter(IRobotDataReceiver, IRobotController):
         self.data_callback: Callable[[RobotData], None] = None
         self.webrtc_msgs = asyncio.Queue()
         self.on_validated_callback = on_validated_callback
-        self.on_video_frame_callback = on_video_frame_callback
+        # self.on_video_frame_callback = on_video_frame_callback
         # Store the event loop (passed from main thread or detect current)
         if event_loop:
             self.main_loop = event_loop
@@ -46,7 +46,7 @@ class WebRTCAdapter(IRobotDataReceiver, IRobotController):
                 token=self.config.token,
                 on_validated=self._on_validated,
                 on_message=self._on_data_channel_message,
-                on_video_frame=self.on_video_frame_callback if self.config.enable_video else None,
+                # on_video_frame=self.on_video_frame_callback if self.config.enable_video else None,
                 decode_lidar=self.config.decode_lidar,
             )
             

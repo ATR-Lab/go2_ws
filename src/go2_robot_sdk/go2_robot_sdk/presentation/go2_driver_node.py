@@ -29,7 +29,7 @@ from go2_interfaces.msg import LowState, VoxelMapCompressed, WebRtcReq
 from sensor_msgs.msg import PointCloud2, JointState, Joy, Image, CameraInfo
 from nav_msgs.msg import Odometry
 
-from ..domain.entities import RobotConfig, RobotData, CameraData
+from ..domain.entities import RobotConfig, RobotData  # , CameraData
 from ..application.services import RobotDataService, RobotControlService
 from ..infrastructure.ros2 import ROS2Publisher
 from ..infrastructure.webrtc import WebRTCAdapter
@@ -105,7 +105,7 @@ class Go2DriverNode(Node):
         self.webrtc_adapter = WebRTCAdapter(
             config=self.config,
             on_validated_callback=self._on_robot_validated,
-            on_video_frame_callback=self._on_video_frame if self.config.enable_video else None,
+            # on_video_frame_callback=self._on_video_frame if self.config.enable_video else None,
             event_loop=self.event_loop
         )
         
@@ -139,7 +139,7 @@ class Go2DriverNode(Node):
                 ('robot_ip', robot_ip),
                 ('token', token),
                 ('conn_type', conn_type),
-                ('enable_video', True),
+                ('enable_video', False),  # Commented out video processing
                 ('decode_lidar', True),
                 ('publish_raw_voxel', False),
                 ('obstacle_avoidance', False),
@@ -163,7 +163,7 @@ class Go2DriverNode(Node):
         self.get_logger().info(f"Robot IPs: {config.robot_ip_list}")
         self.get_logger().info(f"Connection type: {config.conn_type}")
         self.get_logger().info(f"Connection mode: {config.conn_mode}")
-        self.get_logger().info(f"Enable video: {config.enable_video}")
+        # self.get_logger().info(f"Enable video: {config.enable_video}")
         self.get_logger().info(f"Decode lidar: {config.decode_lidar}")
         self.get_logger().info(f"Publish raw voxel: {config.publish_raw_voxel}")
         self.get_logger().info(f"Obstacle avoidance: {config.obstacle_avoidance}")
@@ -179,11 +179,11 @@ class Go2DriverNode(Node):
             depth=1
         )
         # Camera QoS optimized for smooth video display
-        camera_qos = QoSProfile(
-            reliability=QoSReliabilityPolicy.RELIABLE,
-            history=QoSHistoryPolicy.KEEP_LAST,
-            depth=10  # Buffer frames for guaranteed smooth delivery
-        )
+        # camera_qos = QoSProfile(
+        #     reliability=QoSReliabilityPolicy.RELIABLE,
+        #     history=QoSHistoryPolicy.KEEP_LAST,
+        #     depth=10  # Buffer frames for guaranteed smooth delivery
+        # )
 
         publishers = {
             'joint_state': [],
@@ -191,8 +191,8 @@ class Go2DriverNode(Node):
             'lidar': [],
             'odometry': [],
             'imu': [],
-            'camera': [],
-            'camera_info': [],
+            # 'camera': [],
+            # 'camera_info': [],
             'voxel': []
         }
 
@@ -206,8 +206,8 @@ class Go2DriverNode(Node):
                 lidar_topic = 'point_cloud2'
                 odom_topic = 'odom'
                 imu_topic = 'imu'
-                camera_topic = 'camera/image_raw'
-                camera_info_topic = 'camera/camera_info'
+                # camera_topic = 'camera/image_raw'
+                # camera_info_topic = 'camera/camera_info'
                 voxel_topic = '/utlidar/voxel_map_compressed'
             else:
                 prefix = f'robot{i}'
@@ -216,8 +216,8 @@ class Go2DriverNode(Node):
                 lidar_topic = f'{prefix}/point_cloud2'
                 odom_topic = f'{prefix}/odom'
                 imu_topic = f'{prefix}/imu'
-                camera_topic = f'{prefix}/camera/image_raw'
-                camera_info_topic = f'{prefix}/camera/camera_info'
+                # camera_topic = f'{prefix}/camera/image_raw'
+                # camera_info_topic = f'{prefix}/camera/camera_info'
                 voxel_topic = f'{prefix}/utlidar/voxel_map_compressed'
 
             # Create publishers
@@ -234,15 +234,15 @@ class Go2DriverNode(Node):
             publishers['imu'].append(
                 self.create_publisher(IMU, imu_topic, qos_profile))
 
-            if self.config.enable_video:
-                publishers['camera'].append(
-                    self.create_publisher(
-                        Image, camera_topic, camera_qos,
-                        qos_overriding_options=QoSOverridingOptions.with_default_policies()))
-                publishers['camera_info'].append(
-                    self.create_publisher(
-                        CameraInfo, camera_info_topic, camera_qos,
-                        qos_overriding_options=QoSOverridingOptions.with_default_policies()))
+            # if self.config.enable_video:
+            #     publishers['camera'].append(
+            #         self.create_publisher(
+            #             Image, camera_topic, camera_qos,
+            #             qos_overriding_options=QoSOverridingOptions.with_default_policies()))
+            #     publishers['camera_info'].append(
+            #         self.create_publisher(
+            #             CameraInfo, camera_info_topic, camera_qos,
+            #             qos_overriding_options=QoSOverridingOptions.with_default_policies()))
 
             if self.config.publish_raw_voxel:
                 publishers['voxel'].append(
@@ -379,101 +379,101 @@ class Go2DriverNode(Node):
         # Environment variables were set at module import time
         logger.info("FFmpeg environment variables configured at module import (AV_LOG_LEVEL=fatal)")
 
-    async def _on_video_frame(self, track: MediaStreamTrack, robot_id: str) -> None:
-        """Callback for processing video frames"""
-        # Phase 1 optimizations: Frame rate limiting, resolution downscaling, 
-        # subscription checking, and enhanced error handling
-        max_fps = 15  # Limit to 15 FPS for CPU efficiency
-        frame_interval = 1.0 / max_fps
-        last_frame_time = 0
-        consecutive_errors = 0
-        max_consecutive_errors = 5
-        
-        # Phase 2A: Error tracking for adaptive behavior and diagnostics
-        error_tracker = VideoErrorTracker()
-        last_stats_log = 0
+    # async def _on_video_frame(self, track: MediaStreamTrack, robot_id: str) -> None:
+    #     """Callback for processing video frames"""
+    #     # Phase 1 optimizations: Frame rate limiting, resolution downscaling, 
+    #     # subscription checking, and enhanced error handling
+    #     max_fps = 15  # Limit to 15 FPS for CPU efficiency
+    #     frame_interval = 1.0 / max_fps
+    #     last_frame_time = 0
+    #     consecutive_errors = 0
+    #     max_consecutive_errors = 5
+    #     
+    #     # Phase 2A: Error tracking for adaptive behavior and diagnostics
+    #     error_tracker = VideoErrorTracker()
+    #     last_stats_log = 0
 
-        while True:
-            try:
-                # Phase 2A: Add timeout to prevent indefinite blocking during H.264 decoder recovery
-                frame = await asyncio.wait_for(track.recv(), timeout=0.1)
-                
-                # Phase 1: Frame rate limiting - skip frames if processing too fast
-                current_time = time.time()
-                if current_time - last_frame_time < frame_interval:
-                    continue  # Skip frame to maintain target FPS
-                
-                # Phase 1: Enhanced frame skipping - more aggressive under load
-                if consecutive_errors > 3:  # High stress - skip 75% of frames
-                    if int(current_time * 10) % 4 != 0:
-                        continue
-                elif consecutive_errors > 1:  # Moderate stress - skip 50% of frames  
-                    if int(current_time * 10) % 2 == 0:
-                        continue
-                
-                last_frame_time = current_time
-                
-                # Phase 1: Subscription checking - skip processing if no subscribers
-                if not self.ros2_publisher.has_camera_subscribers(robot_id):
-                    continue  # Skip frame processing when no one is listening
-                
-                # Phase 1: Resolution downscaling - 85% data reduction (1920x1080 -> 640x480)
-                img = frame.to_ndarray(format="rgb24", width=640, height=480)
+    #     while True:
+    #         try:
+    #             # Phase 2A: Add timeout to prevent indefinite blocking during H.264 decoder recovery
+    #             frame = await asyncio.wait_for(track.recv(), timeout=0.1)
+    #             
+    #             # Phase 1: Frame rate limiting - skip frames if processing too fast
+    #             current_time = time.time()
+    #             if current_time - last_frame_time < frame_interval:
+    #                 continue  # Skip frame to maintain target FPS
+    #             
+    #             # Phase 1: Enhanced frame skipping - more aggressive under load
+    #             if consecutive_errors > 3:  # High stress - skip 75% of frames
+    #                 if int(current_time * 10) % 4 != 0:
+    #                     continue
+    #             elif consecutive_errors > 1:  # Moderate stress - skip 50% of frames  
+    #                 if int(current_time * 10) % 2 == 0:
+    #                     continue
+    #             
+    #             last_frame_time = current_time
+    #             
+    #             # Phase 1: Subscription checking - skip processing if no subscribers
+    #             if not self.ros2_publisher.has_camera_subscribers(robot_id):
+    #                 continue  # Skip frame processing when no one is listening
+    #             
+    #             # Phase 1: Resolution downscaling - 85% data reduction (1920x1080 -> 640x480)
+    #             img = frame.to_ndarray(format="rgb24", width=640, height=480)
 
-                # Create camera data
-                camera_data = CameraData(
-                    image=img,
-                    height=img.shape[0],
-                    width=img.shape[1],
-                    encoding="rgb8"
-                )
+    #             # Create camera data
+    #             camera_data = CameraData(
+    #                 image=img,
+    #                 height=img.shape[0],
+    #                 width=img.shape[1],
+    #                 encoding="rgb8"
+    #             )
 
-                robot_data = RobotData(
-                    robot_id=robot_id,
-                    timestamp=0.0,
-                    camera_data=camera_data
-                )
+    #             robot_data = RobotData(
+    #                 robot_id=robot_id,
+    #                 timestamp=0.0,
+    #                 camera_data=camera_data
+    #             )
 
-                # Publish via ROS2Publisher
-                self.ros2_publisher.publish_camera_data(robot_data)
-                
-                # Reset error counter on successful processing
-                consecutive_errors = 0
-                
-                # Phase 2A: Record successful frame processing
-                error_tracker.record_success()
-                
-                # Phase 2A: Periodic error statistics logging (every 30 seconds)
-                current_time = time.time()
-                if current_time - last_stats_log > 30:
-                    stats = error_tracker.get_stats()
-                    if stats['total_errors'] > 0:
-                        logger.info(f"Video error stats: {stats['error_rate']:.1%} error rate, "
-                                   f"{stats['total_errors']} total errors")
-                    last_stats_log = current_time
-                
-                await asyncio.sleep(0)
+    #             # Publish via ROS2Publisher
+    #             self.ros2_publisher.publish_camera_data(robot_data)
+    #             
+    #             # Reset error counter on successful processing
+    #             consecutive_errors = 0
+    #             
+    #             # Phase 2A: Record successful frame processing
+    #             error_tracker.record_success()
+    #             
+    #             # Phase 2A: Periodic error statistics logging (every 30 seconds)
+    #             current_time = time.time()
+    #             if current_time - last_stats_log > 30:
+    #                 stats = error_tracker.get_stats()
+    #                 if stats['total_errors'] > 0:
+    #                     logger.info(f"Video error stats: {stats['error_rate']:.1%} error rate, "
+    #                                f"{stats['total_errors']} total errors")
+    #                 last_stats_log = current_time
+    #             
+    #             await asyncio.sleep(0)
 
-            except asyncio.TimeoutError:
-                # Phase 2A: Handle frame receive timeout - skip frame without counting as error
-                continue
-                
-            except Exception as e:
-                # Phase 1: Enhanced error handling for video failures
-                consecutive_errors += 1
-                
-                # Phase 2A: Record error for tracking and statistics
-                error_tracker.record_error()
-                
-                logger.error(f"Error processing video frame (attempt {consecutive_errors}): {e}")
-                
-                # Phase 1: Graceful degradation - break after too many consecutive errors
-                if consecutive_errors >= max_consecutive_errors:
-                    logger.error(f"Too many consecutive video errors ({consecutive_errors}), stopping video processing for robot {robot_id}")
-                    break
-                
-                # Brief pause before retry to avoid tight error loop
-                await asyncio.sleep(0.1)
+    #         except asyncio.TimeoutError:
+    #             # Phase 2A: Handle frame receive timeout - skip frame without counting as error
+    #             continue
+    #             
+    #         except Exception as e:
+    #             # Phase 1: Enhanced error handling for video failures
+    #             consecutive_errors += 1
+    #             
+    #             # Phase 2A: Record error for tracking and statistics
+    #             error_tracker.record_error()
+    #             
+    #             logger.error(f"Error processing video frame (attempt {consecutive_errors}): {e}")
+    #             
+    #             # Phase 1: Graceful degradation - break after too many consecutive errors
+    #             if consecutive_errors >= max_consecutive_errors:
+    #                 logger.error(f"Too many consecutive video errors ({consecutive_errors}), stopping video processing for robot {robot_id}")
+    #                 break
+    #             
+    #             # Brief pause before retry to avoid tight error loop
+    #             await asyncio.sleep(0.1)
 
     # CycloneDDS callbacks
     def _on_cyclonedds_low_state(self, msg: LowState) -> None:

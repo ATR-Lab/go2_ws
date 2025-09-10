@@ -39,7 +39,7 @@ class Go2Connection:
         on_validated: Optional[Callable] = None,
         on_message: Optional[Callable] = None,
         on_open: Optional[Callable] = None,
-        on_video_frame: Optional[Callable] = None,
+        # on_video_frame: Optional[Callable] = None,
         decode_lidar: bool = True,
     ):
         self.pc = RTCPeerConnection()
@@ -53,7 +53,7 @@ class Go2Connection:
         self.on_validated = on_validated
         self.on_message = on_message
         self.on_open = on_open
-        self.on_video_frame = on_video_frame
+        # self.on_video_frame = on_video_frame
         self.decode_lidar = decode_lidar
         
         # Initialize components
@@ -66,12 +66,12 @@ class Go2Connection:
         self.data_channel.on("message", self.on_data_channel_message)
         
         # Setup peer connection events
-        self.pc.on("track", self.on_track)
+        # self.pc.on("track", self.on_track)  # Video track handling disabled
         self.pc.on("connectionstatechange", self.on_connection_state_change)
         
         # Add video transceiver if video callback provided
-        if self.on_video_frame:
-            self.pc.addTransceiver("video", direction="recvonly")
+        # if self.on_video_frame:
+        #     self.pc.addTransceiver("video", direction="recvonly")
     
     def on_connection_state_change(self) -> None:
         """Handle peer connection state changes"""
@@ -122,20 +122,20 @@ class Go2Connection:
         except Exception as e:
             logger.error(f"Error processing data channel message: {e}")
     
-    async def on_track(self, track: MediaStreamTrack) -> None:
-        """Handle incoming media tracks (video)"""
-        # logger.info("Receiving video")
-        
-        if track.kind == "video" and self.on_video_frame:
-            try:
-                # await self.on_video_frame(track, self.robot_num)
-                # Create ONLY ONE task per track, not per frame
-                if not hasattr(self, '_video_task') or self._video_task.done():
-                    self._video_task = asyncio.create_task(
-                        self.on_video_frame(track, self.robot_num)
-                    )
-            except Exception as e:
-                logger.error(f"Error creating video frame task: {e}")
+    # async def on_track(self, track: MediaStreamTrack) -> None:
+    #     """Handle incoming media tracks (video)"""
+    #     # logger.info("Receiving video")
+    #     
+    #     if track.kind == "video" and self.on_video_frame:
+    #         try:
+    #             # await self.on_video_frame(track, self.robot_num)
+    #             # Create ONLY ONE task per track, not per frame
+    #             if not hasattr(self, '_video_task') or self._video_task.done():
+    #                 self._video_task = asyncio.create_task(
+    #                     self.on_video_frame(track, self.robot_num)
+    #                 )
+    #         except Exception as e:
+    #             logger.error(f"Error creating video frame task: {e}")
     
     def validate_robot_conn(self, message: Dict[str, Any]) -> None:
         """Handle robot validation response"""

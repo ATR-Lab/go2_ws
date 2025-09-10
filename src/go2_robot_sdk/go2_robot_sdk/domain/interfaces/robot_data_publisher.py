@@ -28,10 +28,10 @@ class IRobotDataPublisher(ABC):
         """Publish LiDAR point cloud data"""
         pass
 
-    @abstractmethod
-    def publish_camera_data(self, robot_data: RobotData) -> None:
-        """Publish camera image data"""
-        pass
+    # @abstractmethod
+    # def publish_camera_data(self, robot_data: RobotData) -> None:
+    #     """Publish camera image data"""
+    #     pass
 
     @abstractmethod
     def publish_voxel_data(self, robot_data: RobotData) -> None:
