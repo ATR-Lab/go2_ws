@@ -89,6 +89,7 @@ class Go2NodeFactory:
             DeclareLaunchArgument('joystick', default_value='true', description='Launch joystick'),
             DeclareLaunchArgument('teleop', default_value='true', description='Launch teleoperation'),
             DeclareLaunchArgument('collision_monitor', default_value='true', description='Launch collision monitor'),
+            DeclareLaunchArgument('restamp_nav_actions', default_value='true', description='Launch navigation action restamping relay'),
         ]
     
     def create_robot_state_nodes(self) -> List[Node]:
@@ -326,15 +327,17 @@ class Go2NodeFactory:
             'launch', 'foxglove_bridge_launch.xml'
         )
         
-        # Optional: start a Python restamping relay if RESTAMP_RELAY path is provided
-        restamp_script = os.getenv('RESTAMP_RELAY', '')
-        relay_proc = []
-        if restamp_script:
-            relay_proc = [ExecuteProcess(
-                cmd=['python3', restamp_script],
+        # Navigation action restamping relay node
+        with_restamp_nav_actions = LaunchConfiguration('restamp_nav_actions', default='true')
+        relay_node = [
+            Node(
+                package='scan_restamper',
+                executable='restamp_nav_actions',
                 name='restamp_nav_actions',
-                output='screen'
-            )]
+                output='screen',
+                condition=IfCondition(with_restamp_nav_actions),
+            )
+        ]
         
         # Nav2 include wrapped with action remaps for BT Navigator
         nav2_group = GroupAction(actions=[
@@ -407,8 +410,8 @@ class Go2NodeFactory:
             ),
             # Nav2 with BT action remaps
             nav2_group,
-            # Optional relay (only if RESTAMP_RELAY env var is set)
-            *relay_proc,
+            # Navigation action restamping relay
+            *relay_node,
         ]
 
 
