@@ -4,9 +4,9 @@ from geometry_msgs.msg import Twist
 import time
 import threading
 
-class XboxTeleopNode:
+class Go2XboxTeleopNode:
     def __init__(self):
-        self.node = rclpy.create_node('xbox_teleop')
+        self.node = rclpy.create_node('go2_xbox_teleop')
         self.publisher = self.node.create_publisher(Twist, '/cmd_vel_joy', 10)
         
         self.cmd_vel_msg = Twist()
@@ -28,7 +28,7 @@ class XboxTeleopNode:
         self.joystick = pygame.joystick.Joystick(0)
         self.joystick.init()
         print(f"Controller detected: {self.joystick.get_name()}")
-        print("Xbox Controller Teleop Node initiated")
+        print("Go2 Xbox Controller Teleop Node initiated")
         print("Left stick: Move forward/backward and turn")
         print("Press 'B' button (button 1) to exit")
 
@@ -95,7 +95,7 @@ def main(args=None):
     rclpy.init(args=args)
     
     try:
-        xbox_teleop_node = XboxTeleopNode()
+        xbox_teleop_node = Go2XboxTeleopNode()
         
         # Start ROS2 spinning in a separate thread
         spin_thread = threading.Thread(target=rclpy.spin, args=(xbox_teleop_node.node,))

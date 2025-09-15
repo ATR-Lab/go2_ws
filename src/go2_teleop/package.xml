@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>keyboard_teleop</name>
+  <name>go2_teleop</name>
   <version>0.1.0</version>
-  <description>Keyboard teleoperation node using pynput for publishing Twist messages</description>
+  <description>Go2 robot teleoperation package supporting Xbox controller and keyboard input</description>
 
   <maintainer email="your_email@example.com">Your Name</maintainer>
   <license>MIT</license>

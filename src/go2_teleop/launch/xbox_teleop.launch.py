@@ -4,8 +4,8 @@ from launch_ros.actions import Node
 def generate_launch_description():
     return LaunchDescription([
         Node(
-            package='keyboard_teleop',
-            executable='keyboard_teleop',
+            package='go2_teleop',
+            executable='teleop_xbox_controller',
             output='screen',
         ),
     ])
