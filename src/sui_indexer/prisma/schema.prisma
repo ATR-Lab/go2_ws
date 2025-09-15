@@ -1,0 +1,50 @@
+// Prisma schema for SuiPy Event Indexer ROS2 Node
+// This schema mirrors the coffee club implementation
+
+generator client {
+    provider             = "prisma-client-py"
+    interface           = "asyncio"
+    recursive_type_depth = 5
+}
+
+/// We can setup the provider to our database
+/// For this DEMO, we're using sqlite, which allows us to not
+/// have external dependencies.
+datasource db {
+    provider = "sqlite"
+    url      = env("DATABASE_URL")
+}
+
+/// Cafes registered in the coffee club system
+model Cafe {
+    objectId    String    @id
+    creator     String
+    name        String?
+    location    String?
+    description String?
+    status      String?
+    createdAt   DateTime
+    updatedAt   DateTime?
+
+    @@index([creator])
+    @@index([status])
+}
+
+/// Coffee orders placed at cafes
+model CoffeeOrder {
+    objectId   String    @id
+    status     String
+    coffeeType String?
+    createdAt  DateTime
+    updatedAt  DateTime?
+
+    @@index([status])
+    @@index([createdAt])
+}
+
+/// Saves the latest cursor for a given key.
+model Cursor {
+    id       String @id
+    eventSeq String
+    txDigest String
+} 
