@@ -29,7 +29,7 @@ class Go2KeyboardTeleopNode:
             self.old_settings = termios.tcgetattr(sys.stdin)
         except termios.error:
             print("ERROR: This node requires a terminal (TTY) for keyboard input.")
-            print("Please run directly in a terminal instead of through launch:")
+            print("Please run directly in a terminal:")
             print("  ros2 run go2_teleop teleop_keyboard")
             raise RuntimeError("No TTY available for keyboard input")
         
