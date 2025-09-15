@@ -8,7 +8,7 @@ setup(
     packages=[package_name],
     data_files=[
         ('share/' + package_name, ['package.xml']),
-        ('share/' + package_name + '/launch', ['launch/xbox_teleop.launch.py']),
+        ('share/' + package_name + '/launch', ['launch/xbox_teleop.launch.py', 'launch/keyboard_teleop.launch.py']),
         ('share/' + package_name + '/resource', ['resource/go2_teleop']),
     ],
     install_requires=['setuptools', 'pygame'],
@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             'teleop_xbox_controller = go2_teleop.xbox_teleop_node:main',
+            'teleop_keyboard = go2_teleop.keyboard_teleop_node:main',
         ],
     },
 )
