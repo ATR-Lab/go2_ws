@@ -62,3 +62,6 @@ go2_robot_sdk/coverage.xml
 
 petting_zoo_venv/
 models/
+
+# Sui Indexer database files
+data/
