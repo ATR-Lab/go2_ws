@@ -1,0 +1,30 @@
+# Sui QR Processor Configuration
+# This file contains default parameters for the sui_qr_processor_node
+
+sui_qr_processor_node:
+  ros__parameters:
+    # Camera Configuration
+    camera_topic: "/camera/image_raw"
+    
+    # Sui Network Configuration
+    default_network: "testnet"  # Default network if QR doesn't specify or fallback
+    allowed_networks: ["testnet", "mainnet", "devnet"]  # Security: only allow these networks
+    
+    # Network Selection Strategy:
+    # - "qr_with_fallback": Use QR network if valid, otherwise use default_network
+    # - "config_only": Always use default_network, ignore QR chain field
+    # - "qr_only": Only use QR network, fail if invalid or missing
+    network_source: "qr_with_fallback"
+    
+    # QR Detection Configuration
+    qr_detection_interval: 0.2  # Process QR detection every 200ms (saves CPU)
+    enable_visualization: true  # Draw QR code boundaries and data on frames
+    
+    # Transaction Execution Configuration
+    execution_cooldown: 30.0  # Minimum seconds between transaction executions
+    cache_max_size: 1000      # Maximum number of processed transactions to remember
+    
+    # Performance Tuning
+    # Lower qr_detection_interval = more responsive but higher CPU usage
+    # Higher execution_cooldown = safer but less responsive to new transactions
+    # Larger cache_max_size = better duplicate detection but more memory usage
