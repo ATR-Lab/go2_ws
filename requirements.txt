@@ -43,3 +43,10 @@ flake8>=5.0.0  # Linting
 # Optional: Performance monitoring
 psutil>=5.9.0  # System monitoring
 memory-profiler>=0.60.0  # Memory profiling
+
+# Blockchain/Sui dependencies (for sui_indexer packages)
+# Database ORM for blockchain event indexing
+prisma>=0.10.0
+
+# Sui Python SDK
+git+https://github.com/OpenDive/sui-py.git
