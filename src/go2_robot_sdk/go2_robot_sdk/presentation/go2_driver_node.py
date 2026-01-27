@@ -1,9 +1,17 @@
 # Copyright (c) 2024, RoboVerse community
 # SPDX-License-Identifier: BSD-3-Clause
 
+# Phase 2A+: Configure FFmpeg environment variables before any imports
+import os
+os.environ['AV_LOG_LEVEL'] = 'fatal'  # Suppress FFmpeg log messages
+os.environ['FFMPEG_LOG_LEVEL'] = 'fatal'  # Alternative FFmpeg log control
+os.environ['AV_CODEC_FLAG_ERROR_CONCEALMENT'] = '1'  # Enable error concealment
+
 import asyncio
+import collections
 import logging
 import os
+import time
 from typing import Dict, Any
 
 from aiortc import MediaStreamTrack
@@ -29,6 +37,44 @@ from ..infrastructure.webrtc import WebRTCAdapter
 logging.basicConfig(level=logging.WARN)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+
+class VideoErrorTracker:
+    """Track H.264 error rates for adaptive behavior"""
+    
+    def __init__(self, window_size=50):
+        self.error_window = collections.deque(maxlen=window_size)
+        self.total_errors = 0
+        self.last_error_time = 0
+        
+    def record_error(self):
+        """Record a video processing error"""
+        current_time = time.time()
+        self.error_window.append(1)
+        self.total_errors += 1
+        self.last_error_time = current_time
+        
+    def record_success(self):
+        """Record successful video processing"""
+        self.error_window.append(0)
+        
+    def get_error_rate(self) -> float:
+        """Get current error rate (0.0 to 1.0)"""
+        if len(self.error_window) < 10:
+            return 0.0
+        return sum(self.error_window) / len(self.error_window)
+        
+    def is_error_storm(self) -> bool:
+        """Check if we're in an error storm (>50% error rate)"""
+        return self.get_error_rate() > 0.5
+        
+    def get_stats(self) -> dict:
+        """Get error statistics for logging"""
+        return {
+            'error_rate': self.get_error_rate(),
+            'total_errors': self.total_errors,
+            'window_size': len(self.error_window)
+        }
 
 
 class Go2DriverNode(Node):
@@ -67,6 +113,12 @@ class Go2DriverNode(Node):
         
         # Set callback for data
         self.webrtc_adapter.set_data_callback(self._on_robot_data_received)
+        
+        # Phase 2A: Configure aiortc logging to reduce H.264 error spam
+        self._configure_aiortc_logging()
+        
+        # Phase 2A+: Configure FFmpeg error concealment for robust H.264 decoding
+        self._configure_ffmpeg_error_concealment()
         
         # Subscribers initialization
         self._setup_subscribers()
@@ -289,14 +341,84 @@ class Go2DriverNode(Node):
         """Callback for receiving data from robot"""
         self.robot_data_service.process_webrtc_message(msg, robot_id)
 
+    def _configure_aiortc_logging(self) -> None:
+        """Configure aiortc logging to reduce H.264 error spam"""
+        logging.getLogger('aiortc.codecs.h264').setLevel(logging.ERROR)
+        logging.getLogger('aiortc.codecs').setLevel(logging.ERROR)
+        logging.getLogger('aiortc').setLevel(logging.WARNING)
+        logger.info("Configured aiortc logging to reduce H.264 error spam")
+
+    def _configure_ffmpeg_error_concealment(self) -> None:
+        """Configure FFmpeg error concealment and log suppression for robust H.264 decoding"""
+        try:
+            import av
+            import av.logging
+            
+            # Primary approach: PyAV log level control (most reliable)
+            av.logging.set_level(av.logging.QUIET)  # Complete suppression of FFmpeg messages
+            logger.info("Configured PyAV to completely suppress FFmpeg H.264 decoder messages")
+            
+            # Secondary approach: Try to configure codec options (may not work in all versions)
+            try:
+                # Attempt to set global decoder options for error concealment
+                h264_codec = av.codec.Codec('h264', 'r')
+                if hasattr(h264_codec, 'options'):
+                    h264_codec.options.update({
+                        'error_concealment': '3',  # All error concealment methods
+                        'ec': '3',  # Alternative parameter name
+                    })
+                    logger.info("Configured H.264 decoder error concealment options")
+            except Exception as codec_error:
+                logger.debug(f"Could not configure codec options (this is normal): {codec_error}")
+                
+        except ImportError:
+            logger.warning("PyAV not available - cannot suppress FFmpeg logging")
+        except Exception as e:
+            logger.warning(f"Could not configure PyAV logging: {e}")
+            
+        # Environment variables were set at module import time
+        logger.info("FFmpeg environment variables configured at module import (AV_LOG_LEVEL=fatal)")
+
     async def _on_video_frame(self, track: MediaStreamTrack, robot_id: str) -> None:
         """Callback for processing video frames"""
-        # logger.info(f"Video frame received for robot {robot_id}")
+        # Phase 1 optimizations: Frame rate limiting, resolution downscaling, 
+        # subscription checking, and enhanced error handling
+        max_fps = 15  # Limit to 15 FPS for CPU efficiency
+        frame_interval = 1.0 / max_fps
+        last_frame_time = 0
+        consecutive_errors = 0
+        max_consecutive_errors = 5
+        
+        # Phase 2A: Error tracking for adaptive behavior and diagnostics
+        error_tracker = VideoErrorTracker()
+        last_stats_log = 0
 
         while True:
             try:
-                frame = await track.recv()
-                img = frame.to_ndarray(format="rgb24")
+                # Phase 2A: Add timeout to prevent indefinite blocking during H.264 decoder recovery
+                frame = await asyncio.wait_for(track.recv(), timeout=0.1)
+                
+                # Phase 1: Frame rate limiting - skip frames if processing too fast
+                current_time = time.time()
+                if current_time - last_frame_time < frame_interval:
+                    continue  # Skip frame to maintain target FPS
+                
+                # Phase 1: Enhanced frame skipping - more aggressive under load
+                if consecutive_errors > 3:  # High stress - skip 75% of frames
+                    if int(current_time * 10) % 4 != 0:
+                        continue
+                elif consecutive_errors > 1:  # Moderate stress - skip 50% of frames  
+                    if int(current_time * 10) % 2 == 0:
+                        continue
+                
+                last_frame_time = current_time
+                
+                # Phase 1: Subscription checking - skip processing if no subscribers
+                if not self.ros2_publisher.has_camera_subscribers(robot_id):
+                    continue  # Skip frame processing when no one is listening
+                
+                # Phase 1: Resolution downscaling - 85% data reduction (1920x1080 -> 640x480)
+                img = frame.to_ndarray(format="rgb24", width=640, height=480)
 
                 # Create camera data
                 camera_data = CameraData(
@@ -314,11 +436,44 @@ class Go2DriverNode(Node):
 
                 # Publish via ROS2Publisher
                 self.ros2_publisher.publish_camera_data(robot_data)
+                
+                # Reset error counter on successful processing
+                consecutive_errors = 0
+                
+                # Phase 2A: Record successful frame processing
+                error_tracker.record_success()
+                
+                # Phase 2A: Periodic error statistics logging (every 30 seconds)
+                current_time = time.time()
+                if current_time - last_stats_log > 30:
+                    stats = error_tracker.get_stats()
+                    if stats['total_errors'] > 0:
+                        logger.info(f"Video error stats: {stats['error_rate']:.1%} error rate, "
+                                   f"{stats['total_errors']} total errors")
+                    last_stats_log = current_time
+                
                 await asyncio.sleep(0)
 
+            except asyncio.TimeoutError:
+                # Phase 2A: Handle frame receive timeout - skip frame without counting as error
+                continue
+                
             except Exception as e:
-                logger.error(f"Error processing video frame: {e}")
-                break
+                # Phase 1: Enhanced error handling for video failures
+                consecutive_errors += 1
+                
+                # Phase 2A: Record error for tracking and statistics
+                error_tracker.record_error()
+                
+                logger.error(f"Error processing video frame (attempt {consecutive_errors}): {e}")
+                
+                # Phase 1: Graceful degradation - break after too many consecutive errors
+                if consecutive_errors >= max_consecutive_errors:
+                    logger.error(f"Too many consecutive video errors ({consecutive_errors}), stopping video processing for robot {robot_id}")
+                    break
+                
+                # Brief pause before retry to avoid tight error loop
+                await asyncio.sleep(0.1)
 
     # CycloneDDS callbacks
     def _on_cyclonedds_low_state(self, msg: LowState) -> None:
